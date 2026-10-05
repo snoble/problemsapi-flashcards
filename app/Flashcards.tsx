@@ -14,9 +14,10 @@
 // has been answered right.
 import { FormEvent, useEffect, useRef, useState } from 'react';
 
-type Deck = { token: string; publishableKey: string; apiUrl: string };
-type Card = { id: string; prompt: string };
-type Mark = { question: string; correct: boolean; value: unknown };
+import { messageOf, postJson } from '../lib/request';
+import { Deck, LearnerChecked, LearnerPull, type Card } from '../lib/schemas';
+import Tex from './Tex';
+
 type Loaded = { deck: Deck; cards: Card[] };
 
 type Stage =
@@ -27,31 +28,9 @@ type Stage =
   | { name: 'card'; at: number; showing: number; tries: number; result: 'right' | 'wrong' | 'unread' | null }
   | { name: 'done' };
 
-// A refusal as a sentence for the learner.
-function refusal(status: number, body: { error?: string; message?: string } | null): string {
-  if (status === 429) return body?.error ?? 'This deck has used its checks for today. Start a new deck to keep going.';
-  if (status === 503) return body?.error ?? 'The question service is busy. Try again in a moment.';
-  return body?.error ?? body?.message ?? `Something went wrong (HTTP ${status}).`;
-}
-
-async function post<T>(url: string, body: unknown, key?: string): Promise<T> {
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', ...(key ? { authorization: `Bearer ${key}` } : {}) },
-      body: JSON.stringify(body),
-    });
-  } catch {
-    throw new Error('The service could not be reached. Check your connection and try again.');
-  }
-  const answer = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(refusal(response.status, answer));
-  return answer as T;
-}
-
-// "7 × 8 =" shown as "7 × 8".
-const shown = (prompt: string) => prompt.replace(/\s*=$/, '');
+// A card as the page shows it: the question's LaTeX, typeset, or its
+// plain prompt when a question has no LaTeX.
+const Question = ({ card }: { card: Card }) => (card.latex ? <Tex latex={card.latex} /> : <>{card.prompt}</>);
 
 // How long a card stays up before it times out.
 const CARD_MS = 5000;
@@ -64,8 +43,8 @@ const PREFETCH_AT = 5;
 
 // A new pull from the app's server, then its questions through the learner route.
 async function loadDeck(): Promise<Loaded> {
-  const deck = await post<Deck>('/api/deck', {});
-  const learner = await post<{ questions: Card[] }>(`${deck.apiUrl}/learner/pull`, { token: deck.token }, deck.publishableKey);
+  const deck = await postJson('/api/deck', {}, Deck);
+  const learner = await postJson(new URL('/learner/pull', deck.apiUrl), { token: deck.token }, LearnerPull, deck.publishableKey);
   if (learner.questions.length === 0) throw new Error('The deck came back empty. Try another.');
   return { deck, cards: learner.questions };
 }
@@ -159,7 +138,7 @@ export default function Flashcards() {
       setCameBack(0);
       show(0);
     } catch (e) {
-      setProblem((e as Error).message);
+      setProblem(messageOf(e));
       setStage({ name: 'idle' });
     } finally {
       setBusy(false);
@@ -173,7 +152,7 @@ export default function Flashcards() {
     missed.current.add(at);
     const rest = [...queue.slice(1), at];
     setQueue(rest);
-    setNotice(timedOut ? `Time's up. ${shown(cards[at].prompt)} comes back later.` : '');
+    setNotice(timedOut ? "Time's up. That card comes back later." : '');
     show(rest[0]);
   }
 
@@ -187,9 +166,10 @@ export default function Flashcards() {
     setBusy(true);
     let result: 'right' | 'wrong' | 'unread' | null = null;
     try {
-      const checked = await post<{ marks: Mark[] }>(
-        `${deck.apiUrl}/learner/check`,
+      const checked = await postJson(
+        new URL('/learner/check', deck.apiUrl),
         { token: deck.token, by_question: [{ question: card.id, answer: given }] },
+        LearnerChecked,
         deck.publishableKey,
       );
       const found = checked.marks.find((m) => m.question === card.id);
@@ -200,7 +180,7 @@ export default function Flashcards() {
       setStage({ ...stage, tries, result });
       if (result !== 'right') input.current?.select();
     } catch (e) {
-      setProblem((e as Error).message);
+      setProblem(messageOf(e));
     } finally {
       inFlight.current = false;
       setBusy(false);
@@ -263,7 +243,7 @@ export default function Flashcards() {
             <div className="timer-fill" style={{ width: `${(left / CARD_MS) * 100}%` }} />
           </div>
           <p className="question" data-testid="question">
-            {shown(cards[stage.at].prompt)}
+            <Question card={cards[stage.at]} />
           </p>
           <form className="answer" onSubmit={check}>
             <input
@@ -285,7 +265,7 @@ export default function Flashcards() {
             )}
           </form>
           <p className={`mark ${stage.result === 'right' ? 'right' : stage.result || notice ? 'wrong' : ''}`} role="status">
-            {stage.result === 'right' && `Right! ${shown(cards[stage.at].prompt)} = ${answer.trim()}`}
+            {stage.result === 'right' && `Right! The answer is ${answer.trim()}.`}
             {stage.result === 'wrong' && 'Not quite. Try again.'}
             {stage.result === 'unread' && 'Type a whole number.'}
             {stage.result === null && notice}
