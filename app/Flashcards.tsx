@@ -1,123 +1,63 @@
 'use client';
 
-// The learner's side: everything here runs in the browser with only the
-// publishable key and a pull's token, as a customer's learner page does.
-// It reads the deck from /learner/pull, which never carries answers, and
-// marks each typed answer with /learner/check.
-//
-// On a phone the answer box keeps the keyboard up for the whole deck: it is
-// never disabled, and Enter checks an answer, then moves to the next card.
-//
-// Each card has five seconds. When they run out, a right answer still in
-// the box counts, even if it was never sent; anything else is a timeout,
-// and the card goes to the back of the deck. The deck ends when every card
-// has been answered right.
-import { FormEvent, useEffect, useRef, useState } from 'react';
+import { FormEvent, useRef, useState } from 'react';
 
+import { fetchDeck, type Loaded } from '../lib/deck';
 import { messageOf, postJson } from '../lib/request';
-import { Deck, LearnerChecked, LearnerPull, type Card } from '../lib/schemas';
+import { LearnerChecked, type Card, type Deck } from '../lib/schemas';
 import Tex from './Tex';
 
-type Loaded = { deck: Deck; cards: Card[] };
+const PREFETCH_AT = 5;
+
+type Result = 'right' | 'wrong' | 'unread' | null;
 
 type Stage =
   | { name: 'idle' }
   | { name: 'loading' }
-  // `at` is the card's index in the deck; `showing` counts every time a
-  // card is put up, so a card that comes back gets a fresh five seconds.
-  | { name: 'card'; at: number; showing: number; tries: number; result: 'right' | 'wrong' | 'unread' | null }
+  // `showing` changes every time a card goes up, restarting its countdown.
+  | { name: 'card'; at: number; showing: number; tries: number; result: Result }
   | { name: 'done' };
 
-// A card as the page shows it: the question's LaTeX, typeset, or its
-// plain prompt when a question has no LaTeX.
 const Question = ({ card }: { card: Card }) => (card.latex ? <Tex latex={card.latex} /> : <>{card.prompt}</>);
 
-// How long a card stays up before it times out.
-const CARD_MS = 5000;
-
-// How many cards are answered right before the next deck starts loading,
-// so "New deck" has it ready without a wait on the app's server and the
-// API. The first deck starts loading when the page opens, so "Start a
-// deck" has it ready too.
-const PREFETCH_AT = 5;
-
-// A new pull from the app's server, then its questions through the learner route.
-async function loadDeck(): Promise<Loaded> {
-  const deck = await postJson('/api/deck', {}, Deck);
-  const learner = await postJson(new URL('/learner/pull', deck.apiUrl), { token: deck.token }, LearnerPull, deck.publishableKey);
-  if (learner.questions.length === 0) throw new Error('The deck came back empty. Try another.');
-  return { deck, cards: learner.questions };
-}
-
-export default function Flashcards() {
+export default function Flashcards({ first }: { first: Loaded | null }) {
   const [deck, setDeck] = useState<Deck | null>(null);
   const [cards, setCards] = useState<Card[]>([]);
-  // The cards still to answer right, the one up first.
   const [queue, setQueue] = useState<number[]>([]);
   const [stage, setStage] = useState<Stage>({ name: 'idle' });
   const [answer, setAnswer] = useState('');
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState('');
   const [notice, setNotice] = useState('');
-  const [left, setLeft] = useState(CARD_MS);
   const [firstTry, setFirstTry] = useState(0);
   const [cameBack, setCameBack] = useState(0);
+
   const input = useRef<HTMLInputElement>(null);
-  const upcoming = useRef<Promise<Loaded> | null>(null);
-  // When the card up now was put up, and how many cards have been put up.
-  const shownAt = useRef(0);
+  const upcoming = useRef<Promise<Loaded> | null>(first ? Promise.resolve(first) : null);
   const showings = useRef(0);
-  // Cards that timed out or were skipped: a later right answer is not first-try.
   const missed = useRef(new Set<number>());
-  // A check on its way, and whether time ran out meanwhile: then that
-  // check settles the card.
+  // Time can run out while a check is on its way; that check then settles the card.
   const inFlight = useRef(false);
   const late = useRef(false);
-  // The last answer sent with Check, so the deadline does not send it again.
   const lastSent = useRef('');
+
   const finished = cards.length - queue.length;
 
-  useEffect(() => {
-    if (stage.name === 'card') input.current?.focus();
-  }, [stage]);
-
-  // On the start screen, or partway through a deck, start loading the next
-  // one. A failure here is forgotten: "Start a deck" or "New deck" then
-  // loads one itself and reports its own error.
-  useEffect(() => {
-    const due = stage.name === 'idle' || (stage.name === 'card' && finished >= PREFETCH_AT);
-    if (!due || upcoming.current) return;
-    const loading = loadDeck();
+  function prefetch() {
+    if (upcoming.current) return;
+    const loading = fetchDeck();
     loading.catch(() => {
       if (upcoming.current === loading) upcoming.current = null;
     });
     upcoming.current = loading;
-  }, [stage, finished]);
-
-  // The countdown: it runs while a card is up and not yet answered right.
-  const expire = useRef<() => void>(() => {});
-  const counting = stage.name === 'card' && stage.result !== 'right' ? stage.showing : null;
-  useEffect(() => {
-    if (counting === null) return;
-    const tick = () => {
-      const rest = shownAt.current + CARD_MS - Date.now();
-      setLeft(Math.max(0, rest));
-      if (rest <= 0) {
-        clearInterval(timer);
-        expire.current();
-      }
-    };
-    const timer = setInterval(tick, 100);
-    return () => clearInterval(timer);
-  }, [counting]);
+  }
 
   function show(at: number) {
     showings.current += 1;
-    shownAt.current = Date.now();
     late.current = false;
-    setLeft(CARD_MS);
     setAnswer('');
     setStage({ name: 'card', at, showing: showings.current, tries: 0, result: null });
+    input.current?.focus();
   }
 
   async function start() {
@@ -128,7 +68,8 @@ export default function Flashcards() {
     const ready = upcoming.current;
     upcoming.current = null;
     try {
-      const loaded = await (ready ? ready.catch(() => loadDeck()) : loadDeck());
+      const loaded = await (ready ? ready.catch(fetchDeck) : fetchDeck());
+      if (loaded.cards.length === 0) throw new Error('The deck came back empty. Try another.');
       window.scrollTo(0, 0);
       setDeck(loaded.deck);
       setCards(loaded.cards);
@@ -145,8 +86,6 @@ export default function Flashcards() {
     }
   }
 
-  // Sends the card up now to the back of the deck and puts up the next one.
-  // A card left on its own comes straight back with a fresh five seconds.
   function later(at: number, timedOut: boolean) {
     if (!missed.current.has(at)) setCameBack((n) => n + 1);
     missed.current.add(at);
@@ -156,23 +95,21 @@ export default function Flashcards() {
     show(rest[0]);
   }
 
-  // Marks `given` for the card up now. At the deadline, or when time ran out
-  // while this check was on its way, anything but a right answer is a timeout.
   async function mark(given: string, atDeadline: boolean) {
     if (stage.name !== 'card' || !deck) return;
     const card = cards[stage.at];
     setProblem('');
     inFlight.current = true;
     setBusy(true);
-    let result: 'right' | 'wrong' | 'unread' | null = null;
+    let result: Result = null;
     try {
-      const checked = await postJson(
+      const { marks } = await postJson(
         new URL('/learner/check', deck.apiUrl),
         { token: deck.token, by_question: [{ question: card.id, answer: given }] },
         LearnerChecked,
         deck.publishableKey,
       );
-      const found = checked.marks.find((m) => m.question === card.id);
+      const found = marks.find((m) => m.question === card.id);
       if (!found) throw new Error('The check came back without a mark for this card.');
       result = found.correct ? 'right' : found.value ? 'wrong' : 'unread';
       const tries = stage.tries + 1;
@@ -188,17 +125,18 @@ export default function Flashcards() {
     if (result !== 'right' && (atDeadline || late.current)) later(stage.at, true);
   }
 
-  expire.current = () => {
+  // A right answer still in the box when time runs out counts, even if it was never sent.
+  function expire() {
     if (stage.name !== 'card' || stage.result === 'right') return;
     if (inFlight.current) {
       late.current = true;
       return;
     }
     const given = answer.trim();
-    // An answer already marked is not sent again.
-    if (given && !(stage.result !== null && given === lastSent.current)) void mark(given, true);
+    const alreadyMarked = stage.result !== null && given === lastSent.current;
+    if (given && !alreadyMarked) void mark(given, true);
     else later(stage.at, true);
-  };
+  }
 
   function check(event: FormEvent) {
     event.preventDefault();
@@ -215,6 +153,7 @@ export default function Flashcards() {
     const rest = queue.slice(1);
     setQueue(rest);
     setNotice('');
+    if (cards.length - rest.length >= PREFETCH_AT) prefetch();
     if (rest.length > 0) show(rest[0]);
     else setStage({ name: 'done' });
   }
@@ -235,12 +174,8 @@ export default function Flashcards() {
           <p className="progress">
             Card {finished + 1} of {cards.length}
           </p>
-          <div
-            className={`timer ${stage.result === 'right' ? 'stopped' : ''}`}
-            role="timer"
-            aria-label={`${Math.ceil(left / 1000)} seconds left`}
-          >
-            <div className="timer-fill" style={{ width: `${(left / CARD_MS) * 100}%` }} />
+          <div className={`timer ${stage.result === 'right' ? 'stopped' : ''}`} role="timer" aria-label="Five seconds for this card">
+            <div key={stage.showing} className="timer-fill" onAnimationEnd={expire} />
           </div>
           <p className="question" data-testid="question">
             <Question card={cards[stage.at]} />
@@ -248,9 +183,9 @@ export default function Flashcards() {
           <form className="answer" onSubmit={check}>
             <input
               ref={input}
+              autoFocus
               value={answer}
               onChange={(e) => {
-                // A right answer stays as typed until the next card.
                 if (stage.result !== 'right') setAnswer(e.target.value);
               }}
               inputMode="numeric"

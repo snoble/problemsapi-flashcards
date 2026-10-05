@@ -1,7 +1,3 @@
-// One JSON POST, parsed against a schema. Used by the browser (to this
-// app's routes and the API's learner routes) and by the server (to the
-// API with the secret key). A refusal becomes a RequestError whose message
-// is a sentence a person can read.
 import type { z } from 'zod';
 
 import { Refusal } from './schemas';
@@ -39,5 +35,4 @@ export async function postJson<S extends z.ZodType>(
   return parsed.data;
 }
 
-// An error caught in a `catch`, as a sentence.
 export const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));

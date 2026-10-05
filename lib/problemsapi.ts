@@ -1,8 +1,3 @@
-// The server's side of the Problems API, as a customer's back end uses it:
-// the secret key never leaves this file's process. It copies the stream
-// from a pinned ref once, and makes a fresh pull for every deck. The
-// browser gets only the pull's token and the publishable key, which reach
-// that pull's questions and its answer checks and nothing else.
 import 'server-only';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
@@ -10,11 +5,8 @@ import { z } from 'zod';
 import { postJson, RequestError } from './request';
 import { Pulled, StreamSummary, type Deck } from './schemas';
 
-// The stream this app pulls from. Its definition and program come from a
-// ref (PROBLEMS_API_STREAM_REF) that POST /streams/share answered for a
-// stream designed in problemsapi's chat, so every deploy runs the same
-// program: times tables up to 12 x 12, each prompt written as "7 × 8 =".
-// Changing the stream means sharing a new revision and setting its ref.
+// The stream is copied from PROBLEMS_API_STREAM_REF (from POST /streams/share),
+// so every deploy runs the same program.
 export const STREAM = 'times-table-facts';
 export const DECK_SIZE = 12;
 
@@ -39,9 +31,7 @@ function call<S extends z.ZodType>(path: string, body: unknown, schema: S) {
   return postJson(new URL(path, env.PROBLEMS_API_URL), body, schema, env.PROBLEMS_API_SECRET_KEY);
 }
 
-// Copy the pinned stream into this account. The API changes nothing when
-// the stream already has the ref's definition and program, so each server
-// process sends it once; no model is called.
+// A no-op when the stream already matches the ref; sent once per server process.
 async function makeStream(): Promise<void> {
   await call('/streams/from_ref', { ref: settings().PROBLEMS_API_STREAM_REF, stream: STREAM }, StreamSummary);
 }
@@ -55,8 +45,6 @@ function ensureStream(): Promise<void> {
   return streamReady;
 }
 
-// A new deck: a pull under a key no other deck uses, so it has its own
-// questions and its own budget of answer checks.
 export async function newDeck(): Promise<Deck> {
   await ensureStream();
   const { pull } = await call('/pulls/create', { stream: STREAM, key: `deck-${randomUUID()}`, count: DECK_SIZE }, Pulled);

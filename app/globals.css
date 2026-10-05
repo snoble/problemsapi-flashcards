@@ -31,8 +31,7 @@ button:disabled { opacity: 0.5; cursor: default; }
 .mark.wrong { color: var(--warm); }
 .problem { border-left: 3px solid var(--warm); background: var(--warm-soft); padding: 10px 14px; border-radius: 0 8px 8px 0; margin-top: 16px; }
 .score { font-size: 22px; font-weight: 700; margin: 0; }
-/* While a deck is out, the card sits at the top of the screen so a phone's
-   keyboard leaves the question, the answer box and the mark in view. */
+/* Keep the card above a phone's keyboard. */
 main:has(.deck) .intro { display: none; }
 main:has(.deck) { padding-top: 12px; }
 .panel.deck { padding: 16px; margin-top: 8px; }
@@ -40,7 +39,7 @@ main:has(.deck) { padding-top: 12px; }
   .question { font-size: 48px; margin: 8px 0 12px; }
   .mark { margin-top: 8px; }
 }
-/* The card's five seconds, draining left to right. */
 .timer { height: 6px; margin: 10px auto 0; max-width: 240px; border-radius: 3px; background: var(--line); overflow: hidden; }
-.timer-fill { height: 100%; background: var(--accent); transition: width 100ms linear; }
-.timer.stopped .timer-fill { background: var(--good); transition: none; }
+.timer-fill { height: 100%; background: var(--accent); animation: drain 5s linear forwards; }
+.timer.stopped .timer-fill { background: var(--good); animation-play-state: paused; }
+@keyframes drain { from { width: 100%; } to { width: 0; } }
