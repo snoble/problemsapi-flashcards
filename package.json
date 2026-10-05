@@ -1,0 +1,22 @@
+{
+  "name": "problemsapi-flashcards",
+  "private": true,
+  "description": "An example app on problemsapi.com: times-table flashcards. The server holds the secret key and makes each deck; the browser reads it and checks answers with the publishable key and the pull's token.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "next": "16.3.8",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "server-only": "^0.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "typescript": "^5.6.0"
+  }
+}
