@@ -40,7 +40,19 @@ main:has(.deck) { padding-top: 12px; }
   .question { font-size: 48px; margin: 8px 0 12px; }
   .mark { margin-top: 8px; }
 }
-/* The card's five seconds, draining left to right. */
 .timer { height: 6px; margin: 10px auto 0; max-width: 240px; border-radius: 3px; background: var(--line); overflow: hidden; }
-.timer-fill { height: 100%; background: var(--accent); transition: width 100ms linear; }
-.timer.stopped .timer-fill { background: var(--good); transition: none; }
+.timer-fill { height: 100%; background: var(--accent); animation: drain linear forwards; }
+.timer.stopped .timer-fill { background: var(--good); animation-play-state: paused; }
+@keyframes drain { from { width: 100%; } to { width: 0; } }
+.boards { text-align: left; }
+.pick { display: block; font-weight: 600; }
+.pick select, .boards input { font: inherit; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
+.pick select { max-width: 100%; margin-left: 4px; }
+.scores { padding-left: 1.6em; margin: 12px 0; font-variant-numeric: tabular-nums; }
+.scores li { padding: 2px 0; }
+.scores .who { font-weight: 600; margin-right: 8px; overflow-wrap: anywhere; }
+.save, .make, .invite { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
+.save p { flex-basis: 100%; margin: 0; font-weight: 600; }
+.save input, .make input, .invite input { flex: 1 1 12ch; min-width: 0; }
+.total { font-size: 18px; font-weight: 600; margin: 8px 0 0; font-variant-numeric: tabular-nums; }
+.scores .hint { font-size: 13px; }
