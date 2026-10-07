@@ -24,6 +24,8 @@ const Answers = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('number') }),
   // The answer is the number of the right option, from 1 to `options`.
   z.object({ kind: z.literal('choice'), options: z.int().min(2).max(6) }),
+  // The answer is typed words, such as a git command.
+  z.object({ kind: z.literal('text') }),
 ]);
 
 // What the browser knows about a deck. The server also knows its stream's ref.
@@ -76,14 +78,21 @@ export const NewScore = z.object({
 export const Pull = z.object({ token: z.string(), publishableKey: z.string(), apiUrl: z.url() });
 export type Pull = z.infer<typeof Pull>;
 
-export const Card = z.object({ id: z.string(), prompt: z.string(), latex: z.string().nullable() });
+export const Card = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('number'), id: z.string(), prompt: z.string(), latex: z.string().nullish() }),
+  z.object({ type: z.literal('text'), id: z.string(), prompt: z.string() }),
+]);
 export type Card = z.infer<typeof Card>;
 
 export const LearnerPull = z.object({ questions: z.array(Card) });
 
-export const LearnerChecked = z.object({
-  marks: z.array(z.object({ question: z.string(), correct: z.boolean(), value: z.unknown().nullable() })),
-});
+// A number mark's value is null when the answer could not be read as a number.
+const Mark = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('number'), question: z.string(), correct: z.boolean(), value: z.unknown().nullish() }),
+  z.object({ type: z.literal('text'), question: z.string(), correct: z.boolean() }),
+]);
+
+export const LearnerChecked = z.object({ marks: z.array(Mark) });
 
 export const Refusal = z.object({ error: z.string().optional(), message: z.string().optional() });
 

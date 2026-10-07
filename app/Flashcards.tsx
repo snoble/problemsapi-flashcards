@@ -17,6 +17,9 @@ type Stage =
   | { name: 'card'; at: number; showing: number; tries: number; result: Result }
   | { name: 'done' };
 
+// A typed command is taken as typed: no capitals, corrections or spelling marks.
+const textAnswer = { autoCapitalize: 'none', autoCorrect: 'off', spellCheck: false, maxLength: 40 } as const;
+
 // After this many right answers, the next deck starts loading.
 const PREFETCH_AT = 5;
 
@@ -27,7 +30,7 @@ async function cardsFor(pull: Pull): Promise<Loaded> {
 }
 
 function Question({ card, typeset }: { card: Card; typeset: boolean }) {
-  if (!typeset || card.latex === null)
+  if (!typeset || card.type === 'text' || card.latex == null)
     return (
       <p className={typeset ? 'question' : 'question words'} data-testid="question" data-prompt={card.prompt}>
         {card.prompt}
@@ -142,7 +145,7 @@ export default function Flashcards({ deck, firstPull }: { deck: DeckView; firstP
       );
       const found = marks.find((m) => m.question === card.id);
       if (!found) throw new Error('The check came back without a mark for this card.');
-      result = found.correct ? 'right' : found.value === null ? 'unread' : 'wrong';
+      result = found.correct ? 'right' : found.type === 'number' && found.value == null ? 'unread' : 'wrong';
       const tries = stage.tries + 1;
       input.current?.focus();
       if (result === 'right') {
@@ -254,7 +257,7 @@ export default function Flashcards({ deck, firstPull }: { deck: DeckView; firstP
                   if (stage.result !== 'right') setAnswer(e.target.value);
                 }}
                 autoFocus
-                inputMode="numeric"
+                {...(deck.answers.kind === 'text' ? textAnswer : { inputMode: 'numeric' })}
                 enterKeyHint={stage.result === 'right' ? 'next' : 'go'}
                 autoComplete="off"
                 aria-label="Your answer"
@@ -269,7 +272,7 @@ export default function Flashcards({ deck, firstPull }: { deck: DeckView; firstP
           <p className={`mark ${stage.result === 'right' ? 'right' : stage.result || notice ? 'wrong' : ''}`} role="status">
             {stage.result === 'right' && (deck.answers.kind === 'number' ? `Right! ${cards[stage.at].prompt} ${answer.trim()}` : 'Right!')}
             {stage.result === 'wrong' && 'Not quite. Try again.'}
-            {stage.result === 'unread' && (deck.answers.kind === 'number' ? 'Type a number.' : 'Pick one of the options.')}
+            {stage.result === 'unread' && (deck.answers.kind === 'choice' ? 'Pick one of the options.' : 'Type a number.')}
             {stage.result === null && notice}
           </p>
           <div className="row">
