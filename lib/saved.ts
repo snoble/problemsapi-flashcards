@@ -1,15 +1,21 @@
-// The boards this browser has joined, the picked one and the last player
-// name, in localStorage. Where localStorage is unavailable they last for the visit.
+// The boards this browser has joined, the board picked for each deck and the
+// last player name, in localStorage. Where localStorage is unavailable they
+// last for the visit.
 import { useSyncExternalStore } from 'react';
 import { z } from 'zod';
 
-const Joined = z.object({ id: z.string(), name: z.string() });
+import { FIRST_DECK, json } from '@/lib/schemas';
+
+const Joined = z.object({ id: z.string(), name: z.string(), deck: z.string().default(FIRST_DECK) });
 export type Joined = z.infer<typeof Joined>;
-export type Saved = { boards: Joined[]; picked: string | null; player: string };
+export type Saved = { boards: Joined[]; picks: Record<string, string>; player: string };
 
 const BOARDS = 'flashcards.boards';
-const PICKED = 'flashcards.board';
+const PICKS = 'flashcards.picks';
 const PLAYER = 'flashcards.name';
+
+const JoinedList = json(z.array(Joined)).catch([]);
+const Picks = json(z.record(z.string(), z.string())).catch({});
 
 const visit = new Map<string, string>();
 const listeners = new Set<() => void>();
@@ -30,24 +36,14 @@ function write(key: string, value: string) {
   listeners.forEach((listener) => listener());
 }
 
-function joined(raw: string | null): Joined[] {
-  try {
-    return z.array(Joined).catch([]).parse(JSON.parse(raw ?? '[]'));
-  } catch {
-    return [];
-  }
-}
-
-const nothing: Saved = { boards: [], picked: null, player: '' };
+const nothing: Saved = { boards: [], picks: {}, player: '' };
 let last: { raw: string; saved: Saved } | null = null;
 
 function snapshot(): Saved {
-  const parts = [read(BOARDS), read(PICKED), read(PLAYER)];
+  const parts = [read(BOARDS), read(PICKS), read(PLAYER)];
   const raw = JSON.stringify(parts);
   if (last?.raw !== raw) {
-    const boards = joined(parts[0]);
-    const picked = boards.find((b) => b.id === parts[1])?.id ?? boards[0]?.id ?? null;
-    last = { raw, saved: { boards, picked, player: parts[2] ?? '' } };
+    last = { raw, saved: { boards: JoinedList.parse(parts[0] ?? '[]'), picks: Picks.parse(parts[1] ?? '{}'), player: parts[2] ?? '' } };
   }
   return last.saved;
 }
@@ -63,12 +59,18 @@ function subscribe(listener: () => void) {
 
 export const useSaved = (): Saved => useSyncExternalStore(subscribe, snapshot, () => nothing);
 
-export const pickBoard = (id: string) => write(PICKED, id);
+// The joined boards of one deck, and the one picked for it.
+export function boardsOf({ boards, picks }: Saved, deck: string) {
+  const mine = boards.filter((b) => b.deck === deck);
+  return { boards: mine, picked: mine.find((b) => b.id === picks[deck])?.id ?? mine[0]?.id ?? null };
+}
+
+export const pickBoard = (deck: string, id: string) => write(PICKS, JSON.stringify({ ...snapshot().picks, [deck]: id }));
 
 export const savePlayer = (name: string) => write(PLAYER, name);
 
 export function joinBoard(board: Joined) {
-  const boards = joined(read(BOARDS));
-  if (!boards.some((b) => b.id === board.id)) write(BOARDS, JSON.stringify([...boards, { id: board.id, name: board.name }]));
-  pickBoard(board.id);
+  const { boards } = snapshot();
+  if (!boards.some((b) => b.id === board.id)) write(BOARDS, JSON.stringify([...boards, { id: board.id, name: board.name, deck: board.deck }]));
+  pickBoard(board.deck, board.id);
 }

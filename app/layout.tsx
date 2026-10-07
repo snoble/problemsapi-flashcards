@@ -4,8 +4,8 @@ import 'katex/dist/katex.min.css';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Times Tables Flashcards',
-  description: 'Times-table flashcards to 12 x 12, with questions and answer checks from the Problems API.',
+  title: 'Flashcards',
+  description: 'Flashcard decks with questions and answer checks from the Problems API.',
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

@@ -4,8 +4,8 @@ import { FormEvent, useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 
 import { get, post } from '@/lib/request';
-import { joinBoard, pickBoard, savePlayer, useSaved } from '@/lib/saved';
-import { Board, MISTAKE_MS, TOP, seconds } from '@/lib/schemas';
+import { boardsOf, joinBoard, pickBoard, savePlayer, useSaved } from '@/lib/saved';
+import { Board, type DeckView, TOP, seconds } from '@/lib/schemas';
 
 // A finished deck; `ms` includes the mistakes' penalty.
 export type Finish = { deck: number; ms: number; mistakes: number };
@@ -13,8 +13,10 @@ export type Finish = { deck: number; ms: number; mistakes: number };
 const boardUrl = (id: string) => `/api/boards/${encodeURIComponent(id)}`;
 const fetchBoard = (url: string) => get(Board, url);
 
-export default function Boards({ finish }: { finish: Finish | null }) {
-  const { boards, picked, player: lastPlayer } = useSaved();
+export default function Boards({ deck, finish }: { deck: DeckView; finish: Finish | null }) {
+  const saved = useSaved();
+  const { boards, picked } = boardsOf(saved, deck.slug);
+  const lastPlayer = saved.player;
   const { data: board, error, mutate } = useSWR(picked ? boardUrl(picked) : null, fetchBoard);
   const { mutate: cache } = useSWRConfig();
   const [making, setMaking] = useState(false);
@@ -41,7 +43,7 @@ export default function Boards({ finish }: { finish: Finish | null }) {
   const make = (event: FormEvent) => {
     event.preventDefault();
     return attempt(async () => {
-      const made = await post(Board, '/api/boards', { name: boardName });
+      const made = await post(Board, '/api/boards', { name: boardName, deck: deck.slug });
       await cache(boardUrl(made.id), made, { revalidate: false });
       joinBoard(made);
       setMaking(false);
@@ -80,7 +82,7 @@ export default function Boards({ finish }: { finish: Finish | null }) {
           <select
             value={picked ?? ''}
             onChange={(e) => {
-              pickBoard(e.target.value);
+              pickBoard(deck.slug, e.target.value);
               setCopied(false);
               setProblem('');
             }}
@@ -115,7 +117,7 @@ export default function Boards({ finish }: { finish: Finish | null }) {
                 <span className="who">{s.name}</span>
                 <span className="time">
                   {seconds(s.ms)}
-                  {s.mistakes > 0 && <span className="hint"> with {seconds(s.mistakes * MISTAKE_MS)} added</span>}
+                  {s.mistakes > 0 && <span className="hint"> with {seconds(s.mistakes * deck.mistakeSeconds * 1000)} added</span>}
                 </span>
               </li>
             ))}

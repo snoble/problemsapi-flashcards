@@ -4,10 +4,7 @@ import 'server-only';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 
-import type { Deck } from '@/lib/schemas';
-
-const STREAM = 'times-table-facts';
-const DECK_SIZE = 12;
+import type { DeckSpec, Pull } from '@/lib/schemas';
 
 export class ProblemsApiError extends Error {
   constructor(
@@ -21,7 +18,6 @@ export class ProblemsApiError extends Error {
 const Env = z.object({
   PROBLEMS_API_SECRET_KEY: z.string().min(1),
   PROBLEMS_API_PUBLISHABLE_KEY: z.string().min(1),
-  PROBLEMS_API_STREAM_REF: z.string().min(1),
   PROBLEMS_API_URL: z.url().default('https://api.problemsapi.com'),
 });
 
@@ -46,23 +42,27 @@ async function call<T extends z.ZodType>(path: string, body: unknown, schema: T)
   return schema.parse(answer);
 }
 
-// The stream is copied from a shared ref, so every deploy runs the same
-// program. Copying again changes nothing, so once per server process is enough.
-let streamReady: Promise<unknown> | null = null;
-function ensureStream() {
-  streamReady ??= call('/streams/from_ref', { ref: env().PROBLEMS_API_STREAM_REF, stream: STREAM }, z.unknown()).catch((e) => {
-    streamReady = null;
-    throw e;
-  });
-  return streamReady;
+// Each deck's stream is copied from its shared ref, so every deploy runs the
+// same program. Copying again changes nothing, so once per server process is enough.
+const copied = new Map<string, Promise<unknown>>();
+function ensureStream(deck: DeckSpec) {
+  let ready = copied.get(deck.slug);
+  if (!ready) {
+    ready = call('/streams/from_ref', { ref: deck.ref, stream: deck.slug }, z.unknown()).catch((e) => {
+      copied.delete(deck.slug);
+      throw e;
+    });
+    copied.set(deck.slug, ready);
+  }
+  return ready;
 }
 
-// Each deck is its own pull, so it has its own questions and its own budget of checks.
-export async function newDeck(): Promise<Deck> {
-  await ensureStream();
+// Each deck played is its own pull, so it has its own questions and its own budget of checks.
+export async function newPull(deck: DeckSpec): Promise<Pull> {
+  await ensureStream(deck);
   const { pull } = await call(
     '/pulls/create',
-    { stream: STREAM, key: `deck-${randomUUID()}`, count: DECK_SIZE },
+    { stream: deck.slug, key: `deck-${randomUUID()}`, count: deck.size },
     z.object({ pull: z.object({ token: z.string() }) }),
   );
   const { PROBLEMS_API_PUBLISHABLE_KEY, PROBLEMS_API_URL } = env();

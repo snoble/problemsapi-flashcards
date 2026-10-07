@@ -22,7 +22,9 @@ button:disabled { opacity: 0.5; cursor: default; }
 :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; justify-content: center; }
 .progress { color: var(--muted); font-size: 14px; margin: 0; }
-.question { font-size: 56px; font-weight: 700; line-height: 1.1; margin: 16px 0 20px; font-variant-numeric: tabular-nums; }
+.question { font-size: 56px; font-weight: 700; line-height: 1.1; margin: 16px 0 20px; font-variant-numeric: tabular-nums; white-space: pre-line; }
+/* A question written in words, as a choice deck's are, reads as text. */
+.question.words { font-size: 20px; font-weight: 600; line-height: 1.4; text-align: left; }
 .answer { display: flex; gap: 8px; justify-content: center; }
 .answer input { font: inherit; width: 9ch; font-size: 28px; text-align: center; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
 .answer button { font-size: 20px; }
@@ -56,3 +58,10 @@ main:has(.deck) { padding-top: 12px; }
 .save input, .make input, .invite input { flex: 1 1 12ch; min-width: 0; }
 .total { font-size: 18px; font-weight: 600; margin: 8px 0 0; font-variant-numeric: tabular-nums; }
 .scores .hint { font-size: 13px; }
+.decks { list-style: none; padding: 0; margin: 16px 0 0; display: grid; gap: 12px; }
+.decks a { display: block; text-decoration: none; color: inherit; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+.decks a:hover { border-color: var(--accent); }
+.decks strong { display: block; font-size: 20px; color: var(--accent); }
+.decks span { color: var(--muted); }
+.choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(64px, 1fr)); gap: 8px; max-width: 360px; margin: 0 auto; }
+.choices button { font-size: 24px; padding: 12px 0; }

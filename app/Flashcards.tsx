@@ -2,13 +2,13 @@
 
 // The answer box is never disabled, so a phone keeps its keyboard up for the whole deck.
 import katex from 'katex';
-import { FormEvent, useRef, useState } from 'react';
+import { FormEvent, MouseEvent, useRef, useState } from 'react';
 
 import Boards, { type Finish } from './Boards';
 import { post } from '@/lib/request';
-import { type Card, Deck, LearnerChecked, LearnerPull, MISTAKE_MS, seconds } from '@/lib/schemas';
+import { type Card, type DeckView, LearnerChecked, LearnerPull, Pull, seconds, secondsWord } from '@/lib/schemas';
 
-type Loaded = { deck: Deck; cards: Card[] };
+type Loaded = { pull: Pull; cards: Card[] };
 type Result = 'right' | 'wrong' | 'unread' | null;
 type Stage =
   | { name: 'idle' }
@@ -17,26 +17,30 @@ type Stage =
   | { name: 'card'; at: number; showing: number; tries: number; result: Result }
   | { name: 'done' };
 
-const CARD_MS = 5000;
 // After this many right answers, the next deck starts loading.
 const PREFETCH_AT = 5;
 
-async function cardsFor(deck: Deck): Promise<Loaded> {
-  const { questions } = await post(LearnerPull, `${deck.apiUrl}/learner/pull`, { token: deck.token }, deck.publishableKey);
+async function cardsFor(pull: Pull): Promise<Loaded> {
+  const { questions } = await post(LearnerPull, `${pull.apiUrl}/learner/pull`, { token: pull.token }, pull.publishableKey);
   if (questions.length === 0) throw new Error('The deck came back empty. Try another.');
-  return { deck, cards: questions };
+  return { pull, cards: questions };
 }
 
-const newDeck = async () => cardsFor(await post(Deck, '/api/deck', {}));
-
-function Question({ card }: { card: Card }) {
-  if (card.latex === null) return <p className="question" data-testid="question" data-prompt={card.prompt}>{card.prompt}</p>;
+function Question({ card, typeset }: { card: Card; typeset: boolean }) {
+  if (!typeset || card.latex === null)
+    return (
+      <p className={typeset ? 'question' : 'question words'} data-testid="question" data-prompt={card.prompt}>
+        {card.prompt}
+      </p>
+    );
   const html = katex.renderToString(card.latex, { throwOnError: false });
   return <p className="question" data-testid="question" data-prompt={card.prompt} dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
-export default function Flashcards({ firstDeck }: { firstDeck: Promise<Deck | null> }) {
-  const [deck, setDeck] = useState<Deck | null>(null);
+export default function Flashcards({ deck, firstPull }: { deck: DeckView; firstPull: Promise<Pull | null> }) {
+  const cardMs = deck.cardSeconds * 1000;
+  const newDeck = async () => cardsFor(await post(Pull, '/api/deck', { deck: deck.slug }));
+  const [pull, setPull] = useState<Pull | null>(null);
   const [cards, setCards] = useState<Card[]>([]);
   const [queue, setQueue] = useState<number[]>([]);
   const [stage, setStage] = useState<Stage>({ name: 'idle' });
@@ -68,7 +72,7 @@ export default function Flashcards({ firstDeck }: { firstDeck: Promise<Deck | nu
     showings.current += 1;
     late.current = false;
     clearTimeout(timer.current);
-    timer.current = setTimeout(() => expire.current(), CARD_MS);
+    timer.current = setTimeout(() => expire.current(), cardMs);
     setAnswer('');
     setStage({ name: 'card', at, showing: showings.current, tries: 0, result: null });
     input.current?.focus();
@@ -80,7 +84,7 @@ export default function Flashcards({ firstDeck }: { firstDeck: Promise<Deck | nu
     if (ready) return ready.catch(newDeck);
     if (usedFirst.current) return newDeck();
     usedFirst.current = true;
-    const made = await firstDeck;
+    const made = await firstPull;
     return made ? cardsFor(made) : newDeck();
   }
 
@@ -92,7 +96,7 @@ export default function Flashcards({ firstDeck }: { firstDeck: Promise<Deck | nu
     try {
       const loaded = await nextDeck();
       window.scrollTo(0, 0);
-      setDeck(loaded.deck);
+      setPull(loaded.pull);
       setCards(loaded.cards);
       setQueue(loaded.cards.map((_, i) => i));
       missed.current = new Set();
@@ -123,7 +127,7 @@ export default function Flashcards({ firstDeck }: { firstDeck: Promise<Deck | nu
   // At the deadline, or when time ran out while the check was on its way,
   // anything but a right answer is a timeout, not a mistake.
   async function mark(given: string, atDeadline: boolean) {
-    if (stage.name !== 'card' || !deck) return;
+    if (stage.name !== 'card' || !pull) return;
     const card = cards[stage.at];
     setProblem('');
     inFlight.current = true;
@@ -132,9 +136,9 @@ export default function Flashcards({ firstDeck }: { firstDeck: Promise<Deck | nu
     try {
       const { marks } = await post(
         LearnerChecked,
-        `${deck.apiUrl}/learner/check`,
-        { token: deck.token, by_question: [{ question: card.id, answer: given }] },
-        deck.publishableKey,
+        `${pull.apiUrl}/learner/check`,
+        { token: pull.token, by_question: [{ question: card.id, answer: given }] },
+        pull.publishableKey,
       );
       const found = marks.find((m) => m.question === card.id);
       if (!found) throw new Error('The check came back without a mark for this card.');
@@ -173,10 +177,20 @@ export default function Flashcards({ firstDeck }: { firstDeck: Promise<Deck | nu
     event.preventDefault();
     if (stage.name !== 'card' || inFlight.current) return;
     if (stage.result === 'right') return advance();
-    const given = answer.trim();
+    send(answer.trim());
+  }
+
+  function send(given: string) {
     if (!given) return;
     lastSent.current = given;
     void mark(given, false);
+  }
+
+  function choose(event: MouseEvent<HTMLButtonElement>) {
+    const option = event.currentTarget.value;
+    if (stage.name !== 'card' || inFlight.current || stage.result === 'right') return;
+    setAnswer(option);
+    send(option);
   }
 
   function advance() {
@@ -193,7 +207,7 @@ export default function Flashcards({ firstDeck }: { firstDeck: Promise<Deck | nu
     }
     if (rest.length > 0) return show(rest[0]);
     clearTimeout(timer.current);
-    setFinish({ deck: decks.current, ms: Math.round(performance.now() - startedAt.current) + mistakes * MISTAKE_MS, mistakes });
+    setFinish({ deck: decks.current, ms: Math.round(performance.now() - startedAt.current) + mistakes * deck.mistakeSeconds * 1000, mistakes });
     setStage({ name: 'done' });
   }
 
@@ -204,7 +218,7 @@ export default function Flashcards({ firstDeck }: { firstDeck: Promise<Deck | nu
           <button className="primary" onClick={start} disabled={busy}>
             {stage.name === 'loading' ? 'Making your deck…' : 'Start a deck'}
           </button>
-          <p className="hint">Five seconds a card. A card you miss comes back later, until you have every one right.</p>
+          <p className="hint">{secondsWord(deck.cardSeconds)} a card. A card you miss comes back later, until you have every one right.</p>
         </section>
       )}
 
@@ -213,40 +227,59 @@ export default function Flashcards({ firstDeck }: { firstDeck: Promise<Deck | nu
           <p className="progress">
             Card {finished + 1} of {cards.length}
           </p>
-          <div className={`timer ${stage.result === 'right' ? 'stopped' : ''}`} role="timer" aria-label="Five seconds a card">
-            <div className="timer-fill" key={stage.showing} style={{ animationDuration: `${CARD_MS}ms` }} />
+          <div className={`timer ${stage.result === 'right' ? 'stopped' : ''}`} role="timer" aria-label={`${secondsWord(deck.cardSeconds)} a card`}>
+            <div className="timer-fill" key={stage.showing} style={{ animationDuration: `${cardMs}ms` }} />
           </div>
-          <Question card={cards[stage.at]} />
-          <form className="answer" onSubmit={check}>
-            <input
-              ref={input}
-              value={answer}
-              onChange={(e) => {
-                if (stage.result !== 'right') setAnswer(e.target.value);
-              }}
-              autoFocus
-              inputMode="numeric"
-              enterKeyHint={stage.result === 'right' ? 'next' : 'go'}
-              autoComplete="off"
-              aria-label="Your answer"
-            />
-            {stage.result !== 'right' && (
-              <button className="primary" type="submit" disabled={busy}>
-                Check
-              </button>
-            )}
-          </form>
+          <Question card={cards[stage.at]} typeset={deck.typeset} />
+          {deck.answers.kind === 'choice' ? (
+            <div className="choices" role="group" aria-label="Options">
+              {Array.from({ length: deck.answers.options }, (_, i) => String(i + 1)).map((option) => (
+                <button
+                  key={option}
+                  className={stage.result === 'right' && answer === option ? 'primary' : ''}
+                  value={option}
+                  onClick={choose}
+                  disabled={busy || stage.result === 'right'}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <form className="answer" onSubmit={check}>
+              <input
+                ref={input}
+                value={answer}
+                onChange={(e) => {
+                  if (stage.result !== 'right') setAnswer(e.target.value);
+                }}
+                autoFocus
+                inputMode="numeric"
+                enterKeyHint={stage.result === 'right' ? 'next' : 'go'}
+                autoComplete="off"
+                aria-label="Your answer"
+              />
+              {stage.result !== 'right' && (
+                <button className="primary" type="submit" disabled={busy}>
+                  Check
+                </button>
+              )}
+            </form>
+          )}
           <p className={`mark ${stage.result === 'right' ? 'right' : stage.result || notice ? 'wrong' : ''}`} role="status">
-            {stage.result === 'right' && `Right! ${cards[stage.at].prompt} ${answer.trim()}`}
+            {stage.result === 'right' && (deck.answers.kind === 'number' ? `Right! ${cards[stage.at].prompt} ${answer.trim()}` : 'Right!')}
             {stage.result === 'wrong' && 'Not quite. Try again.'}
-            {stage.result === 'unread' && 'Type a whole number.'}
+            {stage.result === 'unread' && (deck.answers.kind === 'number' ? 'Type a number.' : 'Pick one of the options.')}
             {stage.result === null && notice}
           </p>
           <div className="row">
             {stage.result === 'right' ? (
-              <button onClick={advance}>Next card</button>
+              // Keyed apart from Skip, so it mounts and takes the focus a choice deck gives it.
+              <button key="next" onClick={advance} autoFocus={deck.answers.kind === 'choice'}>
+                Next card
+              </button>
             ) : (
-              <button onClick={() => later(stage.at, false)} disabled={busy}>
+              <button key="skip" onClick={() => later(stage.at, false)} disabled={busy}>
                 Skip
               </button>
             )}
@@ -265,7 +298,8 @@ export default function Flashcards({ firstDeck }: { firstDeck: Promise<Deck | nu
               {finish.mistakes > 0 && (
                 <span className="hint">
                   {' '}
-                  ({seconds(finish.ms - finish.mistakes * MISTAKE_MS)} plus {finish.mistakes === 1 ? '1 mistake' : `${finish.mistakes} mistakes`} × 5 s)
+                  ({seconds(finish.ms - finish.mistakes * deck.mistakeSeconds * 1000)} plus {finish.mistakes === 1 ? '1 mistake' : `${finish.mistakes} mistakes`} ×{' '}
+                  {deck.mistakeSeconds} s)
                 </span>
               )}
             </p>
@@ -279,7 +313,7 @@ export default function Flashcards({ firstDeck }: { firstDeck: Promise<Deck | nu
         </section>
       )}
 
-      {stage.name !== 'card' && <Boards finish={stage.name === 'done' ? finish : null} />}
+      {stage.name !== 'card' && <Boards deck={deck} finish={stage.name === 'done' ? finish : null} />}
 
       {problem && (
         <p className="problem" role="alert">
