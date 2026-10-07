@@ -5,7 +5,7 @@ export default function NotFound() {
     <main>
       <h1>That board does not exist</h1>
       <p>
-        Check the invite link, or <Link href="/">pick a deck and make a board of your own</Link>.
+        Check the invite link, or <Link href="/">make a board of your own</Link>.
       </p>
     </main>
   );

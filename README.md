@@ -8,7 +8,7 @@ It is meant to be read. It shows the way a customer's app uses the API: the secr
 
 The Problems API has two kinds of key. A secret key makes streams and pulls. A publishable key can only read a pull's questions and check answers to them, and only with that pull's token.
 
-1. The server makes each deck with the secret key ([`lib/problemsapi.ts`](lib/problemsapi.ts)). The first time, it copies the deck's stream into the account from a shared ref (`POST /streams/from_ref`). Then it makes a fresh pull of the deck's size (`POST /pulls/create`) and hands the browser the pull's token and the publishable key. The deck's page starts the first deck while it renders ([`app/d/[slug]/page.tsx`](app/d/[slug]/page.tsx)), and later decks come from [`app/api/deck/route.ts`](app/api/deck/route.ts).
+1. The server makes each deck with the secret key ([`lib/problemsapi.ts`](lib/problemsapi.ts)). The first time, it copies the deck's stream into the account from a shared ref (`POST /streams/from_ref`). Then it makes a fresh pull of the deck's size (`POST /pulls/create`) and hands the browser the pull's token and the publishable key. The deck's page starts the first deck while it renders ([`app/Deck.tsx`](app/Deck.tsx)), and later decks come from [`app/api/deck/route.ts`](app/api/deck/route.ts).
 2. The browser reads the questions with that token (`POST /learner/pull`). Questions never carry their answers. In a deck that typesets, each question's LaTeX is shown with [KaTeX](https://katex.org); other decks show the question's words.
 3. The browser sends each answer to `POST /learner/check`, which marks it ([`app/Flashcards.tsx`](app/Flashcards.tsx)). A number deck's answer is typed. A choice deck's answer is the number of an option, tapped on a button.
 
@@ -18,7 +18,7 @@ The secret key never leaves the server: `lib/problemsapi.ts` imports `server-onl
 
 ## Decks
 
-`FLASHCARD_DECKS` lists the decks as JSON ([`lib/decks.ts`](lib/decks.ts), checked by the `Decks` schema in `lib/schemas.ts`). Each deck has a slug, its stream's ref, a title and intro, how many cards it has, the seconds a card gets, the seconds a mistake adds, whether to typeset, and its kind of answer. The front page lists them, and each plays at `/d/<slug>`. `.env.example` has the times-tables deck.
+`FLASHCARD_DECKS` lists the decks as JSON ([`lib/decks.ts`](lib/decks.ts), checked by the `Decks` schema in `lib/schemas.ts`). Each deck has a slug, its stream's ref, a title and intro, how many cards it has, the seconds a card gets, the seconds a mistake adds, whether to typeset, and its kind of answer. A deploy of one deck plays it on the front page, as problemsapi-flashcards.vercel.app does with times tables. A deploy of several lists them on the front page and plays each at `/d/<slug>`, so another set of decks is another deploy of this app with its own `FLASHCARD_DECKS`. `.env.example` has the times-tables deck.
 
 ## Scoreboards
 
@@ -52,8 +52,9 @@ Or deploy it to Vercel and set the same variables there:
 
 | Path | What it does |
 | --- | --- |
-| `app/page.tsx` | The front page: the list of decks |
-| `app/d/[slug]/page.tsx` | A deck's page, a server component around the flashcards |
+| `app/page.tsx` | The front page: the deck itself, or the list of decks when there are several |
+| `app/Deck.tsx` | A deck's page, a server component around the flashcards |
+| `app/d/[slug]/page.tsx` | A deck's page when the deploy serves several |
 | `app/Flashcards.tsx` | The deck in the browser: cards, timer, checks, the deck's time |
 | `app/Boards.tsx` | The scoreboard panel: pick, make and share boards, save a time |
 | `app/join/[id]/` | The invite link: shows the board and a button to join it |
