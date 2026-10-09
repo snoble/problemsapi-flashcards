@@ -75,7 +75,9 @@ export const NewScore = z.object({
   mistakes: z.int('Mistakes are a whole number.').min(0).max(1000),
 });
 
-export const Pull = z.object({ token: z.string(), publishableKey: z.string(), apiUrl: z.url() });
+// `key` names the pull to the app's own server, which reveals a card's answer
+// from it; the browser reads and checks the pull by its token.
+export const Pull = z.object({ key: z.string(), token: z.string(), publishableKey: z.string(), apiUrl: z.url() });
 export type Pull = z.infer<typeof Pull>;
 
 export const Card = z.discriminatedUnion('type', [
@@ -93,6 +95,8 @@ const Mark = z.discriminatedUnion('type', [
 ]);
 
 export const LearnerChecked = z.object({ marks: z.array(Mark) });
+
+export const Revealed = z.object({ answer: z.string() });
 
 export const Refusal = z.object({ error: z.string().optional(), message: z.string().optional() });
 

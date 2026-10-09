@@ -60,11 +60,21 @@ function ensureStream(deck: DeckSpec) {
 // Each deck played is its own pull, so it has its own questions and its own budget of checks.
 export async function newPull(deck: DeckSpec): Promise<Pull> {
   await ensureStream(deck);
-  const { pull } = await call(
-    '/pulls/create',
-    { stream: deck.slug, key: `deck-${randomUUID()}`, count: deck.size },
-    z.object({ pull: z.object({ token: z.string() }) }),
-  );
+  const key = `deck-${randomUUID()}`;
+  const { pull } = await call('/pulls/create', { stream: deck.slug, key, count: deck.size }, z.object({ pull: z.object({ token: z.string() }) }));
   const { PROBLEMS_API_PUBLISHABLE_KEY, PROBLEMS_API_URL } = env();
-  return { token: pull.token, publishableKey: PROBLEMS_API_PUBLISHABLE_KEY, apiUrl: PROBLEMS_API_URL };
+  return { key, token: pull.token, publishableKey: PROBLEMS_API_PUBLISHABLE_KEY, apiUrl: PROBLEMS_API_URL };
+}
+
+// A number question's answer as written; a text question's answer is its text.
+const Answered = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('number'), id: z.string(), answer_text: z.string() }).transform((q) => ({ id: q.id, answer: q.answer_text })),
+  z.object({ type: z.literal('text'), id: z.string(), answer: z.string() }),
+]);
+
+// The answer to one card of a deck's pull, for a learner who gives up on it.
+// The pull's key is a random name only the browser that played it was given.
+export async function answerOf(deck: DeckSpec, key: string, question: string): Promise<string | null> {
+  const { questions } = await call('/pulls/get', { stream: deck.slug, key }, z.object({ questions: z.array(Answered) }));
+  return questions.find((q) => q.id === question)?.answer ?? null;
 }

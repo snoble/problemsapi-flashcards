@@ -6,10 +6,11 @@ import { FormEvent, MouseEvent, useRef, useState } from 'react';
 
 import Boards, { type Finish } from './Boards';
 import { post } from '@/lib/request';
-import { type Card, type DeckView, LearnerChecked, LearnerPull, Pull, seconds, secondsWord } from '@/lib/schemas';
+import { type Card, type DeckView, LearnerChecked, LearnerPull, Pull, Revealed, seconds, secondsWord } from '@/lib/schemas';
 
 type Loaded = { pull: Pull; cards: Card[] };
-type Result = 'right' | 'wrong' | 'unread' | null;
+// `shown`: the learner gave up and was shown the answer, which is in `revealed`.
+type Result = 'right' | 'wrong' | 'unread' | 'shown' | null;
 type Stage =
   | { name: 'idle' }
   | { name: 'loading' }
@@ -48,6 +49,7 @@ export default function Flashcards({ deck, firstPull }: { deck: DeckView; firstP
   const [queue, setQueue] = useState<number[]>([]);
   const [stage, setStage] = useState<Stage>({ name: 'idle' });
   const [answer, setAnswer] = useState('');
+  const [revealed, setRevealed] = useState('');
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState('');
   const [notice, setNotice] = useState('');
@@ -165,8 +167,30 @@ export default function Flashcards({ deck, firstPull }: { deck: DeckView; firstP
     if (result !== 'right' && (atDeadline || late.current)) later(stage.at, true);
   }
 
+  // Giving up shows the card's answer, counts as a mistake, and sends the
+  // card to the back of the deck when the learner moves on.
+  async function reveal() {
+    if (stage.name !== 'card' || !pull || inFlight.current) return;
+    setProblem('');
+    inFlight.current = true;
+    setBusy(true);
+    try {
+      const shown = await post(Revealed, '/api/deck/answer', { deck: deck.slug, key: pull.key, question: cards[stage.at].id });
+      clearTimeout(timer.current);
+      setMistakes((n) => n + 1);
+      setRevealed(shown.answer);
+      setStage({ ...stage, result: 'shown' });
+      input.current?.focus();
+    } catch (e) {
+      setProblem(e instanceof Error ? e.message : String(e));
+    } finally {
+      inFlight.current = false;
+      setBusy(false);
+    }
+  }
+
   expire.current = () => {
-    if (stage.name !== 'card' || stage.result === 'right') return;
+    if (stage.name !== 'card' || stage.result === 'right' || stage.result === 'shown') return;
     if (inFlight.current) {
       late.current = true;
       return;
@@ -180,6 +204,7 @@ export default function Flashcards({ deck, firstPull }: { deck: DeckView; firstP
     event.preventDefault();
     if (stage.name !== 'card' || inFlight.current) return;
     if (stage.result === 'right') return advance();
+    if (stage.result === 'shown') return later(stage.at, false);
     send(answer.trim());
   }
 
@@ -191,7 +216,7 @@ export default function Flashcards({ deck, firstPull }: { deck: DeckView; firstP
 
   function choose(event: MouseEvent<HTMLButtonElement>) {
     const option = event.currentTarget.value;
-    if (stage.name !== 'card' || inFlight.current || stage.result === 'right') return;
+    if (stage.name !== 'card' || inFlight.current || stage.result === 'right' || stage.result === 'shown') return;
     setAnswer(option);
     send(option);
   }
@@ -242,7 +267,7 @@ export default function Flashcards({ deck, firstPull }: { deck: DeckView; firstP
                   className={stage.result === 'right' && answer === option ? 'primary' : ''}
                   value={option}
                   onClick={choose}
-                  disabled={busy || stage.result === 'right'}
+                  disabled={busy || stage.result === 'right' || stage.result === 'shown'}
                 >
                   {option}
                 </button>
@@ -254,15 +279,15 @@ export default function Flashcards({ deck, firstPull }: { deck: DeckView; firstP
                 ref={input}
                 value={answer}
                 onChange={(e) => {
-                  if (stage.result !== 'right') setAnswer(e.target.value);
+                  if (stage.result !== 'right' && stage.result !== 'shown') setAnswer(e.target.value);
                 }}
                 autoFocus
                 {...(deck.answers.kind === 'text' ? textAnswer : { inputMode: 'numeric' })}
-                enterKeyHint={stage.result === 'right' ? 'next' : 'go'}
+                enterKeyHint={stage.result === 'right' || stage.result === 'shown' ? 'next' : 'go'}
                 autoComplete="off"
                 aria-label="Your answer"
               />
-              {stage.result !== 'right' && (
+              {stage.result !== 'right' && stage.result !== 'shown' && (
                 <button className="primary" type="submit" disabled={busy}>
                   Check
                 </button>
@@ -272,6 +297,11 @@ export default function Flashcards({ deck, firstPull }: { deck: DeckView; firstP
           <p className={`mark ${stage.result === 'right' ? 'right' : stage.result || notice ? 'wrong' : ''}`} role="status">
             {stage.result === 'right' && (deck.answers.kind === 'number' ? `Right! ${cards[stage.at].prompt} ${answer.trim()}` : 'Right!')}
             {stage.result === 'wrong' && 'Not quite. Try again.'}
+            {stage.result === 'shown' && (
+              <>
+                The answer is <strong data-testid="answer">{revealed}</strong>. It comes back later, and counts as a mistake.
+              </>
+            )}
             {stage.result === 'unread' && (deck.answers.kind === 'choice' ? 'Pick one of the options.' : 'Type a number.')}
             {stage.result === null && notice}
           </p>
@@ -281,10 +311,19 @@ export default function Flashcards({ deck, firstPull }: { deck: DeckView; firstP
               <button key="next" onClick={advance} autoFocus={deck.answers.kind === 'choice'}>
                 Next card
               </button>
-            ) : (
-              <button key="skip" onClick={() => later(stage.at, false)} disabled={busy}>
-                Skip
+            ) : stage.result === 'shown' ? (
+              <button key="later" onClick={() => later(stage.at, false)} autoFocus={deck.answers.kind === 'choice'}>
+                Next card
               </button>
+            ) : (
+              <>
+                <button key="skip" onClick={() => later(stage.at, false)} disabled={busy}>
+                  Skip
+                </button>
+                <button key="reveal" onClick={reveal} disabled={busy}>
+                  Show answer
+                </button>
+              </>
             )}
           </div>
         </section>
