@@ -320,9 +320,11 @@ export default function Flashcards({ deck, firstPull }: { deck: DeckView; firstP
                 <button key="skip" onClick={() => later(stage.at, false)} disabled={busy}>
                   Skip
                 </button>
-                <button key="reveal" onClick={reveal} disabled={busy}>
-                  Show answer
-                </button>
+                {deck.answers.kind === 'text' && (
+                  <button key="reveal" onClick={reveal} disabled={busy}>
+                    Show answer
+                  </button>
+                )}
               </>
             )}
           </div>

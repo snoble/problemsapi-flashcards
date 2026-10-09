@@ -9,6 +9,8 @@ export async function POST(request: Request) {
   const wanted = Wanted.safeParse(await request.json().catch(() => null));
   const deck = wanted.success ? findDeck(wanted.data.deck) : null;
   if (!wanted.success || !deck) return Response.json({ error: 'That card does not exist.' }, { status: 404 });
+  // Only a deck of typed commands shows answers; a times-tables deck is practice against the clock.
+  if (deck.answers.kind !== 'text') return Response.json({ error: 'This deck does not show answers.' }, { status: 403 });
   try {
     const answer = await answerOf(deck, wanted.data.key, wanted.data.question);
     if (answer === null) return Response.json({ error: 'That card does not exist.' }, { status: 404 });
