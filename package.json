@@ -1,25 +1,17 @@
 {
   "name": "problemsapi-flashcards",
   "private": true,
-  "description": "An example app on problemsapi.com: times-table flashcards. The server holds the secret key and makes each deck; the browser reads it and checks answers with the publishable key and the pull's token.",
+  "description": "Example apps on problemsapi.com: times-table flashcards and git-command flashcards, sharing one core. Each app's server holds the secret key and makes each deck; the browser reads it and checks answers with the publishable key and the pull's token.",
+  "workspaces": [
+    "core",
+    "times-tables",
+    "git-commands"
+  ],
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
-  },
-  "dependencies": {
-    "@upstash/redis": "^1.39.0",
-    "katex": "^0.16.47",
-    "next": "16.3.8",
-    "react": "19.2.0",
-    "react-dom": "19.2.0",
-    "server-only": "^0.0.1",
-    "swr": "^2.5.1",
-    "zod": "^4.6.5"
+    "lint": "eslint",
+    "build": "npm run build --workspace times-tables --workspace git-commands"
   },
   "devDependencies": {
-    "@types/katex": "^0.16.8",
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",

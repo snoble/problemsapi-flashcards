@@ -1,0 +1,65 @@
+:root {
+  --bg: #fbfaf7; --panel: #ffffff; --ink: #1d2230; --muted: #5d6475; --line: #e3e0d8;
+  --accent: #2f5bd3; --good: #1f7a4d; --warm: #b4560f; --warm-soft: #fbeedd;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14161c; --panel: #1c1f27; --ink: #e8e9ee; --muted: #a2a8b8; --line: #2e323d;
+    --accent: #87a5ff; --good: #6fd19d; --warm: #f0a766; --warm-soft: #3a2a1b;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 560px; margin: 0 auto; padding: 24px 16px 64px; }
+a { color: var(--accent); }
+h1 { font-size: 30px; line-height: 1.15; margin: 8px 0; }
+.brand { font-weight: 700; color: var(--accent); margin: 0; }
+.hint { color: var(--muted); font-size: 14px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 28px 16px; margin-top: 16px; text-align: center; }
+button { font: inherit; font-weight: 600; padding: 10px 16px; border-radius: 8px; border: 1px solid var(--accent); background: var(--panel); color: var(--accent); cursor: pointer; }
+button.primary { background: var(--accent); color: var(--bg); }
+button:disabled { opacity: 0.5; cursor: default; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; justify-content: center; }
+.progress { color: var(--muted); font-size: 14px; margin: 0; }
+.question { font-size: 56px; font-weight: 700; line-height: 1.1; margin: 16px 0 20px; font-variant-numeric: tabular-nums; white-space: pre-line; }
+/* A question written in words reads as text. */
+.question.words { font-size: 20px; font-weight: 600; line-height: 1.4; text-align: left; }
+.answer { display: flex; gap: 8px; justify-content: center; }
+.answer input { font: inherit; width: 9ch; font-size: 28px; text-align: center; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
+.answer button { font-size: 20px; }
+.mark { min-height: 2em; margin: 14px 0 0; font-weight: 600; }
+.mark.right { color: var(--good); }
+.mark.wrong { color: var(--warm); }
+.problem { border-left: 3px solid var(--warm); background: var(--warm-soft); padding: 10px 14px; border-radius: 0 8px 8px 0; margin-top: 16px; }
+.score { font-size: 22px; font-weight: 700; margin: 0; }
+/* While a deck is out, the card sits at the top of the screen so a phone's
+   keyboard leaves the question, the answer box and the mark in view. */
+main:has(.deck) .intro { display: none; }
+main:has(.deck) { padding-top: 12px; }
+.panel.deck { padding: 16px; margin-top: 8px; }
+@media (max-width: 600px) {
+  .question { font-size: 48px; margin: 8px 0 12px; }
+  .mark { margin-top: 8px; }
+}
+.timer { height: 6px; margin: 10px auto 0; max-width: 240px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.timer-fill { height: 100%; background: var(--accent); animation: drain linear forwards; }
+.timer.stopped .timer-fill { background: var(--good); animation-play-state: paused; }
+@keyframes drain { from { width: 100%; } to { width: 0; } }
+.boards { text-align: left; }
+.pick { display: block; font-weight: 600; }
+.pick select, .boards input { font: inherit; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
+.pick select { max-width: 100%; margin-left: 4px; }
+.scores { padding-left: 1.6em; margin: 12px 0; font-variant-numeric: tabular-nums; }
+.scores li { padding: 2px 0; }
+.scores .who { font-weight: 600; margin-right: 8px; overflow-wrap: anywhere; }
+.save, .make, .invite { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
+.save p { flex-basis: 100%; margin: 0; font-weight: 600; }
+.save input, .make input, .invite input { flex: 1 1 12ch; min-width: 0; }
+.total { font-size: 18px; font-weight: 600; margin: 8px 0 0; font-variant-numeric: tabular-nums; }
+.scores .hint { font-size: 13px; }
+.decks { list-style: none; padding: 0; margin: 16px 0 0; display: grid; gap: 12px; }
+.decks a { display: block; text-decoration: none; color: inherit; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+.decks a:hover { border-color: var(--accent); }
+.decks strong { display: block; font-size: 20px; color: var(--accent); }
+.decks span { color: var(--muted); }

@@ -1,0 +1,26 @@
+{
+  "name": "flashcards-core",
+  "private": true,
+  "description": "What both flashcards apps share: the Problems API calls, the deck loop in the browser, scoreboards, and the shared pages and routes.",
+  "exports": {
+    "./app": "./app.ts",
+    "./Boards": "./Boards.tsx",
+    "./boards": "./boards.ts",
+    "./Flashcards": "./Flashcards.tsx",
+    "./flashcards.css": "./flashcards.css",
+    "./pages": "./pages.tsx",
+    "./problemsapi": "./problemsapi.ts",
+    "./request": "./request.ts",
+    "./schemas": "./schemas.ts"
+  },
+  "dependencies": {
+    "@upstash/redis": "^1.39.0",
+    "server-only": "^0.0.1",
+    "swr": "^2.5.1",
+    "zod": "^4.6.5"
+  },
+  "peerDependencies": {
+    "next": "16.3.8",
+    "react": "19.2.0"
+  }
+}
