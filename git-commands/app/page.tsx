@@ -1,10 +1,13 @@
+import { headers } from 'next/headers';
 import Link from 'next/link';
 
 import { Brand } from 'flashcards-core/pages';
 
 import { app } from '@/lib/flashcards';
 
-export default function Home() {
+export default async function Home() {
+  const sent = await headers();
+  const agentUrl = `${sent.get('x-forwarded-proto') ?? 'http'}://${sent.get('host')}/mcp`;
   return (
     <main>
       <Brand />
@@ -22,6 +25,10 @@ export default function Home() {
           </li>
         ))}
       </ul>
+      <p className="hint">
+        Or practise with your own chat agent: add <code>{agentUrl}</code> as an MCP connector, and it
+        asks you the cards while this app checks your answers.
+      </p>
     </main>
   );
 }

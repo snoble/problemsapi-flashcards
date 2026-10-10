@@ -11,15 +11,18 @@ function refusal(status: number, body: unknown): string {
   return `Something went wrong (HTTP ${status}).`;
 }
 
+// A request the service refused or could not take, in words a learner can read.
+export class Refused extends Error {}
+
 async function send<T extends z.ZodType>(schema: T, url: string, init?: RequestInit): Promise<z.infer<T>> {
   let response: Response;
   try {
     response = await fetch(url, init);
   } catch {
-    throw new Error('The service could not be reached. Check your connection and try again.');
+    throw new Refused('The service could not be reached. Check your connection and try again.');
   }
   const body: unknown = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(refusal(response.status, body));
+  if (!response.ok) throw new Refused(refusal(response.status, body));
   return schema.parse(body);
 }
 

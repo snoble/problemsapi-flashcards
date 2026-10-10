@@ -17,6 +17,17 @@ The Problems API has two kinds of key. A secret key makes streams and pulls. A p
 3. The browser sends each answer to `POST /learner/check`, which marks it ([`core/Flashcards.tsx`](core/Flashcards.tsx)). Each app draws its own cards on that shared loop: [`times-tables/app/Tables.tsx`](times-tables/app/Tables.tsx) and [`git-commands/app/Commands.tsx`](git-commands/app/Commands.tsx). A git command is taken as typed, up to 40 characters.
 4. In the git app, a learner who gives up on a card taps Show answer. The browser asks the app's own server ([`git-commands/app/api/deck/answer/route.ts`](git-commands/app/api/deck/answer/route.ts)), which reads the pull with the secret key (`POST /pulls/get`) and returns that one card's answer. The learner routes never give answers, so a reveal goes through the server that made the pull. It costs the deck's mistake penalty, and the card comes back later. Anyone holding a pull's key can reveal its cards this way, which suits flashcards but would not suit a graded quiz.
 
+## With your own chat agent
+
+The git app also serves its decks to a learner's own chat agent, over [MCP](https://modelcontextprotocol.io), at `/mcp` ([`git-commands/lib/agent.ts`](git-commands/lib/agent.ts)). Add `https://git-flashcards-problemsapi.vercel.app/mcp` as a connector in Claude, Cursor or any MCP client; it needs no account and no key. The agent becomes the interface: it asks the cards and the app marks the answers.
+
+- `list_decks` lists the decks.
+- `start_deck` makes a pull as the deck's page does and returns the cards' situations and a session, never their answers.
+- `check_answer` sends the learner's answer to `POST /learner/check` with the publishable key and the pull's token.
+- `show_answer` reads one card's answer with the secret key, as Show answer does. The server's instructions tell the agent to call it only when the learner gives up, and to ask that card again at the end; nothing can make an agent obey them.
+
+The session is the deck, the pull's key and its token, so each request stands alone and any instance answers it.
+
 Every response is parsed with a [Zod](https://zod.dev) schema ([`core/schemas.ts`](core/schemas.ts)) before the app uses it.
 
 The secret key never leaves the server: `core/problemsapi.ts` imports `server-only`, so the build fails if browser code imports it.
@@ -71,6 +82,7 @@ Each app's `vercel.json` runs its routes in Oregon (`pdx1`), next to the API. Ch
 | `git-commands/lib/flashcards.ts` | The git decks |
 | `git-commands/app/Commands.tsx` | A git card: typed command, Show answer |
 | `git-commands/app/api/deck/answer/route.ts` | Shows one card's answer to a learner who gives up |
+| `git-commands/lib/agent.ts` | The git decks as MCP tools for a learner's own chat agent, served at `/mcp` |
 
 ## License
 

@@ -63,8 +63,13 @@ export async function newPull(deck: DeckSpec): Promise<Pull> {
   await ensureStream(deck);
   const key = `deck-${randomUUID()}`;
   const { pull } = await call('/pulls/create', { stream: deck.slug, key, count: deck.size }, z.object({ pull: z.object({ token: z.string() }) }));
+  return { key, token: pull.token, ...learnerAccess() };
+}
+
+// What a learner reads and checks a pull with, given its token.
+export function learnerAccess() {
   const { PROBLEMS_API_PUBLISHABLE_KEY, PROBLEMS_API_URL } = env();
-  return { key, token: pull.token, publishableKey: PROBLEMS_API_PUBLISHABLE_KEY, apiUrl: PROBLEMS_API_URL };
+  return { publishableKey: PROBLEMS_API_PUBLISHABLE_KEY, apiUrl: PROBLEMS_API_URL };
 }
 
 // Started while a deck's page renders and awaited in the browser, so "Start a deck" has it ready.
