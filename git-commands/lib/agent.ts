@@ -13,6 +13,7 @@ import { json, LearnerChecked, LearnerPull } from 'flashcards-core/schemas';
 
 import { answerOf } from './answers';
 import { app } from './flashcards';
+import { ANSWER_MAX } from './typed';
 
 // What the agent holds for a deck it started: the deck, the pull's key (for
 // a given-up card's answer) and its token (for reading and checking it).
@@ -89,15 +90,17 @@ export function agentServer() {
     'check_answer',
     {
       title: 'Check an answer',
-      description: "Marks the learner's answer to one card. A command that does the same thing counts as right.",
+      description: `Marks the learner's answer to one card. A command that does the same thing counts as right. An answer is at most ${ANSWER_MAX} characters.`,
       inputSchema: {
         session: z.string().describe('The session start_deck gave.'),
         card: z.string().describe('The card being answered.'),
-        answer: z.string().max(40).describe('Exactly what the learner typed.'),
+        // Any length is taken, so a longer answer is refused in words, not as a protocol error.
+        answer: z.string().describe(`Exactly what the learner typed, at most ${ANSWER_MAX} characters.`),
       },
     },
     tool(async ({ session, card, answer }: { session: string; card: string; answer: string }) => {
       const { token } = opened(session);
+      if (answer.length > ANSWER_MAX) throw new Refused(`Answers are at most ${ANSWER_MAX} characters; yours is ${answer.length}.`);
       const { apiUrl, publishableKey } = learnerAccess();
       const { marks } = await post(LearnerChecked, `${apiUrl}/learner/check`, { token, by_question: [{ question: card, answer }] }, publishableKey);
       const mark = marks.find((m) => m.question === card);

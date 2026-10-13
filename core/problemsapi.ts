@@ -4,6 +4,7 @@ import 'server-only';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 
+import { fetchRetrying } from './request';
 import type { DeckSpec, Pull } from './schemas';
 
 export class ProblemsApiError extends Error {
@@ -27,10 +28,11 @@ function env() {
   return parsed.data;
 }
 
-// A call to the API with the secret key.
+// A call to the API with the secret key, sent again while the API asks it to
+// (see fetchRetrying).
 export async function call<T extends z.ZodType>(path: string, body: unknown, schema: T): Promise<z.infer<T>> {
   const { PROBLEMS_API_SECRET_KEY, PROBLEMS_API_URL } = env();
-  const response = await fetch(new URL(path, PROBLEMS_API_URL), {
+  const response = await fetchRetrying(new URL(path, PROBLEMS_API_URL), {
     method: 'POST',
     headers: { authorization: `Bearer ${PROBLEMS_API_SECRET_KEY}`, 'content-type': 'application/json' },
     body: JSON.stringify(body),

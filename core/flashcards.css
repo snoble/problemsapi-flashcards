@@ -28,6 +28,11 @@ button:disabled { opacity: 0.5; cursor: default; }
 .answer { display: flex; gap: 8px; justify-content: center; }
 .answer input { font: inherit; width: 9ch; font-size: 28px; text-align: center; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
 .answer button { font-size: 20px; }
+/* A command fills the card's width, set as it is typed. */
+.answer.wide input { flex: 1 1 auto; min-width: 0; width: auto; font-size: 20px; text-align: left; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+/* A shown answer sits on its own line, as typed, above the note about it. */
+.mark code.shown { display: block; width: fit-content; max-width: 100%; margin: 0 auto 4px; padding: 4px 10px; border-radius: 6px; background: var(--warm-soft); color: var(--ink); font: 600 20px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+.mark .shown-note { display: block; }
 .mark { min-height: 2em; margin: 14px 0 0; font-weight: 600; }
 .mark.right { color: var(--good); }
 .mark.wrong { color: var(--warm); }

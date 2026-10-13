@@ -23,10 +23,12 @@ The git app also serves its decks to a learner's own chat agent, over [MCP](http
 
 - `list_decks` lists the decks.
 - `start_deck` makes a pull as the deck's page does and returns the cards' situations and a session, never their answers.
-- `check_answer` sends the learner's answer to `POST /learner/check` with the publishable key and the pull's token.
+- `check_answer` sends the learner's answer to `POST /learner/check` with the publishable key and the pull's token. An answer is at most 40 characters, as on the deck's page; a longer one is refused in a sentence that says so.
 - `show_answer` reads one card's answer with the secret key, as Show answer does. The server's instructions tell the agent to call it only when the learner gives up, and to ask that card again at the end; nothing can make an agent obey them.
 
 The session is the deck, the pull's key and its token, so each request stands alone and any instance answers it.
+
+When the API answers 503 with `code: "try_again"` (it could not settle the request just now, for example two decks started at once), every call, from the server or the browser, is sent again after its `Retry-After` (at most five seconds, with a little jitter), up to three times, before the learner is told the service is busy ([`core/request.ts`](core/request.ts)).
 
 Every response is parsed with a [Zod](https://zod.dev) schema ([`core/schemas.ts`](core/schemas.ts)) before the app uses it.
 

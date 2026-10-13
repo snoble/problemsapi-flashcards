@@ -76,11 +76,26 @@ export function Mark({ play, children }: { play: Play; children?: ReactNode }) {
   );
 }
 
-// A typed answer and its Check button.
-export function AnswerBox({ play, ...typing }: { play: Play } & InputHTMLAttributes<HTMLInputElement>) {
+// The answer shown to a learner who gave up: on a line of its own, set as
+// it is typed, apart from the sentence about the card coming back, so an
+// answer that ends in punctuation (`git add .`) does not run into it.
+export function Shown({ play }: { play: Play }) {
+  return (
+    <>
+      <code className="shown" data-testid="answer">
+        {play.shown}
+      </code>
+      <span className="shown-note">It comes back later, and counts as a mistake.</span>
+    </>
+  );
+}
+
+// A typed answer and its Check button. A `wide` box fills the card's width,
+// for answers longer than a number, such as a command.
+export function AnswerBox({ play, wide, ...typing }: { play: Play; wide?: boolean } & InputHTMLAttributes<HTMLInputElement>) {
   const { input, answer, type, check, settled, busy } = play;
   return (
-    <form className="answer" onSubmit={check}>
+    <form className={wide ? 'answer wide' : 'answer'} onSubmit={check}>
       <input
         ref={input}
         value={answer}

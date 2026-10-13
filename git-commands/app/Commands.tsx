@@ -1,14 +1,16 @@
 'use client';
 
-import Deck, { AnswerBox, Mark, Moves, useDeck } from 'flashcards-core/Flashcards';
+import Deck, { AnswerBox, Mark, Moves, Shown, useDeck } from 'flashcards-core/Flashcards';
 import { post } from 'flashcards-core/request';
 import type { Card, DeckView, Pull } from 'flashcards-core/schemas';
 import { z } from 'zod';
 
+import { ANSWER_MAX } from '@/lib/typed';
+
 const Revealed = z.object({ answer: z.string() });
 
 // A typed command is taken as typed: no capitals, corrections or spelling marks.
-const asTyped = { autoCapitalize: 'none', autoCorrect: 'off', spellCheck: false, maxLength: 40 } as const;
+const asTyped = { autoCapitalize: 'none', autoCorrect: 'off', spellCheck: false, maxLength: ANSWER_MAX } as const;
 
 // Each card asks for a git or gh command. A learner who gives up is shown
 // the answer by this app's server, which holds the secret key.
@@ -23,14 +25,10 @@ export default function Commands({ deck, firstPull }: { deck: DeckView; firstPul
           <p className="question words" data-testid="question" data-prompt={play.card.prompt}>
             {play.card.prompt}
           </p>
-          <AnswerBox play={play} {...asTyped} />
+          <AnswerBox play={play} wide {...asTyped} />
           <Mark play={play}>
             {play.result === 'right' && 'Right!'}
-            {play.result === 'shown' && (
-              <>
-                The answer is <strong data-testid="answer">{play.shown}</strong>. It comes back later, and counts as a mistake.
-              </>
-            )}
+            {play.result === 'shown' && <Shown play={play} />}
           </Mark>
           <Moves play={play}>
             <button key="reveal" onClick={() => play.giveUp(answerOf)} disabled={play.busy}>

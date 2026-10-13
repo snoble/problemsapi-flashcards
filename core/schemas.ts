@@ -80,7 +80,7 @@ const Mark = z.discriminatedUnion('type', [
 
 export const LearnerChecked = z.object({ marks: z.array(Mark) });
 
-export const Refusal = z.object({ error: z.string().optional(), message: z.string().optional() });
+export const Refusal = z.object({ error: z.string().optional(), message: z.string().optional(), code: z.string().optional() });
 
 export const seconds = (ms: number) => `${(ms / 1000).toFixed(1)} s`;
 
