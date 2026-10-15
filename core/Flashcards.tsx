@@ -47,7 +47,8 @@ export type Play = {
   // For the panels around the card.
   view: {
     cards: number;
-    finished: number;
+    // Which card is up, and how many missed cards wait at the back.
+    progress: string;
     showing: number;
     problem: string;
     firstTry: number;
@@ -148,7 +149,6 @@ export function useDeck(deck: DeckView, firstPull: Promise<Pull | null>): Play {
   const [problem, setProblem] = useState('');
   const [notice, setNotice] = useState('');
   const [firstTry, setFirstTry] = useState(0);
-  const [cameBack, setCameBack] = useState(0);
   const [mistakes, setMistakes] = useState(0);
   const [finish, setFinish] = useState<Finish | null>(null);
   const input = useRef<HTMLInputElement>(null);
@@ -158,14 +158,14 @@ export function useDeck(deck: DeckView, firstPull: Promise<Pull | null>): Play {
   const showings = useRef(0);
   const startedAt = useRef(0);
   const decks = useRef(0);
-  // Cards that timed out or were skipped: a later right answer is not first-try.
-  const missed = useRef(new Set<number>());
+  // Cards that timed out, were skipped or given up on: a later right answer
+  // is not first-try, and each one came back for another go.
+  const [missed, setMissed] = useState<ReadonlySet<number>>(new Set());
   // A check on its way, and whether its card's time ran out meanwhile.
   const inFlight = useRef(false);
   const late = useRef(false);
   const lastSent = useRef('');
   const expire = useRef(() => {});
-  const finished = cards.length - queue.length;
   const settled = stage.name === 'card' && (stage.result === 'right' || stage.result === 'shown');
 
   function show(at: number) {
@@ -199,9 +199,8 @@ export function useDeck(deck: DeckView, firstPull: Promise<Pull | null>): Play {
       setPull(loaded.pull);
       setCards(loaded.cards);
       setQueue(loaded.cards.map((_, i) => i));
-      missed.current = new Set();
+      setMissed(new Set());
       setFirstTry(0);
-      setCameBack(0);
       setMistakes(0);
       setFinish(null);
       decks.current += 1;
@@ -216,8 +215,7 @@ export function useDeck(deck: DeckView, firstPull: Promise<Pull | null>): Play {
   }
 
   function later(at: number, timedOut: boolean) {
-    if (!missed.current.has(at)) setCameBack((n) => n + 1);
-    missed.current.add(at);
+    setMissed((m) => new Set(m).add(at));
     const rest = [...queue.slice(1), at];
     setQueue(rest);
     setNotice(timedOut ? "Time's up. That card comes back later." : '');
@@ -247,7 +245,7 @@ export function useDeck(deck: DeckView, firstPull: Promise<Pull | null>): Play {
       input.current?.focus();
       if (result === 'right') {
         clearTimeout(timer.current);
-        if (tries === 1 && !missed.current.has(stage.at)) setFirstTry((n) => n + 1);
+        if (tries === 1 && !missed.has(stage.at)) setFirstTry((n) => n + 1);
       } else {
         if (result === 'wrong' && !atDeadline && !late.current) setMistakes((n) => n + 1);
         input.current?.select();
@@ -333,6 +331,15 @@ export function useDeck(deck: DeckView, firstPull: Promise<Pull | null>): Play {
     setStage({ name: 'done' });
   }
 
+  // Cards are dealt in order and a missed one goes to the back, so a card's
+  // place in the deal is its number, whether it is up first or back again.
+  function progressOf(): string {
+    if (stage.name !== 'card') return '';
+    const waiting = queue.filter((at) => at !== stage.at && missed.has(at)).length;
+    const place = missed.has(stage.at) ? `Back again: card ${stage.at + 1} of ${cards.length}` : `Card ${stage.at + 1} of ${cards.length}`;
+    return waiting > 0 ? `${place} · ${waiting} to come back` : place;
+  }
+
   return {
     deck,
     stage: stage.name,
@@ -353,7 +360,7 @@ export function useDeck(deck: DeckView, firstPull: Promise<Pull | null>): Play {
       if (stage.name === 'card') later(stage.at, false);
     },
     giveUp: (answerOf) => void giveUp(answerOf),
-    view: { cards: cards.length, finished, showing: stage.name === 'card' ? stage.showing : 0, problem, firstTry, cameBack, finish, start: () => void start() },
+    view: { cards: cards.length, progress: progressOf(), showing: stage.name === 'card' ? stage.showing : 0, problem, firstTry, cameBack: missed.size, finish, start: () => void start() },
   };
 }
 
@@ -361,7 +368,7 @@ export function useDeck(deck: DeckView, firstPull: Promise<Pull | null>): Play {
 // app's face (`children`), the finished deck, the boards, and any problem.
 export default function Deck({ play, children }: { play: Play; children: ReactNode }) {
   const { deck, stage, busy, settled } = play;
-  const { cards, finished, showing, problem, firstTry, cameBack, finish, start } = play.view;
+  const { cards, progress, showing, problem, firstTry, cameBack, finish, start } = play.view;
   const cardMs = deck.cardSeconds * 1000;
   return (
     <>
@@ -376,9 +383,7 @@ export default function Deck({ play, children }: { play: Play; children: ReactNo
 
       {stage === 'card' && (
         <section className="panel deck" aria-live="polite">
-          <p className="progress">
-            Card {finished + 1} of {cards}
-          </p>
+          <p className="progress">{progress}</p>
           <div className={`timer ${settled ? 'stopped' : ''}`} role="timer" aria-label={`${secondsWord(deck.cardSeconds)} a card`}>
             <div className="timer-fill" key={showing} style={{ animationDuration: `${cardMs}ms` }} />
           </div>

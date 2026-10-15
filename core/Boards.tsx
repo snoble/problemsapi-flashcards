@@ -25,16 +25,19 @@ export default function Boards({ deck, finish }: { deck: DeckView; finish: Finis
   const [savedDeck, setSavedDeck] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState('');
+  // A failed save shows beside its button, where the player is looking.
+  const [saveProblem, setSaveProblem] = useState('');
   const [copied, setCopied] = useState(false);
   const player = typed ?? lastPlayer;
 
-  async function attempt(work: () => Promise<void>) {
+  async function attempt(work: () => Promise<void>, report: (message: string) => void = setProblem) {
     setBusy(true);
     setProblem('');
+    setSaveProblem('');
     try {
       await work();
     } catch (e) {
-      setProblem(e instanceof Error ? e.message : String(e));
+      report(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
@@ -60,7 +63,7 @@ export default function Boards({ deck, finish }: { deck: DeckView; finish: Finis
       await mutate(after, { revalidate: false });
       setSavedDeck(finish.deck);
       savePlayer(player.trim());
-    });
+    }, (message) => setSaveProblem(`${message} Your time is kept here; press Save my time again in a moment.`));
   };
 
   const invite = board ? `${window.location.origin}/join/${board.id}` : '';
@@ -103,13 +106,18 @@ export default function Boards({ deck, finish }: { deck: DeckView; finish: Finis
           <button className="primary" type="submit" disabled={busy || !player.trim()}>
             Save my time
           </button>
+          {saveProblem && (
+            <p className="problem" role="alert">
+              {saveProblem}
+            </p>
+          )}
         </form>
       )}
       {finish && savedDeck === finish.deck && <p className="hint">Saved.</p>}
 
       {board &&
         (board.scores.length === 0 ? (
-          <p className="hint">No times yet. Finish a deck to set the first one.</p>
+          <p className="hint">{qualifies ? 'No times saved yet. Save yours to be first.' : 'No times yet. Finish a deck to set the first one.'}</p>
         ) : (
           <ol className="scores">
             {board.scores.map((s) => (
