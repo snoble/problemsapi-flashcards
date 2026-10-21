@@ -3,13 +3,13 @@
 import 'server-only';
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
 
 import type { Flashcards } from './app';
 import { findBoard } from './boards';
 import Join from './Join';
-import type { DeckView } from './schemas';
+import { type DeckView, inviteId } from './schemas';
 
 export const deckMetadata = (deck: DeckView): Metadata => ({ title: `${deck.title} flashcards`, description: deck.intro });
 
@@ -35,8 +35,12 @@ export function DeckPage({ deck, brand, children }: { deck: DeckView; brand?: Re
   );
 }
 
-// /join/<id>: a board's invite link.
-export async function JoinPage({ app, id }: { app: Flashcards; id: string }) {
+// /join/<id>: a board's invite link. A link that came with a stray
+// character after its id moves to the link itself.
+export async function JoinPage({ app, id: segment }: { app: Flashcards; id: string }) {
+  const id = inviteId(segment);
+  if (id === null) notFound();
+  if (id !== segment) redirect(`/join/${id}`);
   const board = await findBoard(id);
   const deck = board && app.findDeck(board.deck);
   if (!board || !deck) notFound();
@@ -67,7 +71,8 @@ export function NoSuchBoard() {
     <main>
       <h1>That board does not exist</h1>
       <p>
-        Check the invite link, or <Link href="/">make a board of your own</Link>.
+        Check that the invite link was copied whole, with nothing added after it, or{' '}
+        <Link href="/">make a board of your own</Link>.
       </p>
     </main>
   );

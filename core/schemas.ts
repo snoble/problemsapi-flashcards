@@ -37,6 +37,16 @@ export type DeckSpec = z.infer<typeof DeckSpec>;
 
 export const BoardId = z.base64url().length(16);
 
+// The board id an invite link's last segment names. A mail app may take
+// the character after a link into it (a sentence's full stop, a closing
+// bracket or quote); an id is base64url, so a segment whose first 16
+// characters are an id and whose next is no base64url character names
+// that id. Anything else names no board.
+export function inviteId(segment: string): string | null {
+  const id = segment.slice(0, 16);
+  return BoardId.safeParse(id).success && !/^[A-Za-z0-9_-]/.test(segment.slice(16)) ? id : null;
+}
+
 export const Score = z.object({
   name: z.string(),
   ms: z.int(),
