@@ -1,21 +1,15 @@
 import type { Metadata } from 'next';
 import { connection } from 'next/server';
 
-import { DeckPage, deckMetadata } from 'flashcards-core/pages';
-import { firstPull } from 'flashcards-core/problemsapi';
-import { DeckView } from 'flashcards-core/schemas';
+import { deckMetadata } from 'flashcards-core/pages';
 
-import Tables from '@/app/Tables';
-import { deck } from '@/lib/flashcards';
+import TablesPage from '@/app/TablesPage';
+import { timesTables } from '@/lib/flashcards';
 
-export const metadata: Metadata = deckMetadata(deck);
+export const metadata: Metadata = deckMetadata(timesTables);
 
 export default async function Home() {
   // Each visit makes its own first deck.
   await connection();
-  return (
-    <DeckPage deck={deck}>
-      <Tables deck={DeckView.parse(deck)} firstPull={firstPull(deck)} />
-    </DeckPage>
-  );
+  return <TablesPage deck={timesTables} />;
 }

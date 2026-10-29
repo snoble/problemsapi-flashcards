@@ -16,6 +16,12 @@ function Question({ card }: { card: Card }) {
   return <p className="question" data-testid="question" data-prompt={card.prompt} dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
+// The card's fact with its answer in place: the blank of "3 × _ = 18"
+// filled in, or the answer after "7 × 8 =". The answer was marked right, so
+// it is a number, and shows as one (06 as 6).
+const solved = (prompt: string, answer: string) =>
+  prompt.includes('_') ? prompt.replace('_', answer) : `${prompt} ${answer}`;
+
 // Practice against the clock: the answer is typed on a number pad, and a
 // card never shows its answer.
 export default function Tables({ deck, firstPull }: { deck: DeckView; firstPull: Promise<Pull | null> }) {
@@ -27,7 +33,7 @@ export default function Tables({ deck, firstPull }: { deck: DeckView; firstPull:
           <Question card={play.card} />
           <AnswerBox play={play} inputMode="numeric" />
           <Mark play={play}>
-            {play.result === 'right' && `Right! ${play.card.prompt} ${play.answer.trim()}`}
+            {play.result === 'right' && `Right! ${solved(play.card.prompt, String(Number(play.answer)))}`}
             {play.result === 'unread' && 'Type a number.'}
           </Mark>
           <Moves play={play} />
