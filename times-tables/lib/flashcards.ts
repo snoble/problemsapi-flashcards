@@ -29,8 +29,9 @@ const games = [
   },
 ];
 
-// Every deck is twelve cards typed on a number pad.
-const deck = { size: 12, mistakeSeconds: 5 };
+// Every deck is twelve cards typed on a number pad, and a right answer
+// counts as soon as it is typed.
+const deck = { size: 12, mistakeSeconds: 5, acceptTyped: true };
 
 // Each game's two decks: racing keeps the game's slug, learning adds -learning.
 const paces = games.map((g) => ({

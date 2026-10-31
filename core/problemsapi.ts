@@ -1,11 +1,11 @@
 // The server's side of the Problems API. The secret key never leaves this
 // module; the browser gets only a pull's token and the publishable key.
 import 'server-only';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 
 import { fetchRetrying } from './request';
-import type { DeckSpec, Pull } from './schemas';
+import type { DeckSpec, Fingerprints, Pull } from './schemas';
 
 export class ProblemsApiError extends Error {
   constructor(
@@ -60,12 +60,24 @@ function ensureStream(deck: DeckSpec) {
   return ready;
 }
 
-// Each deck played is its own pull, so it has its own questions and its own budget of checks.
+const Made = z.object({
+  pull: z.object({ token: z.string(), questions: z.array(z.object({ id: z.string(), answer_text: z.string().nullish() })) }),
+});
+
+export const fingerprint = (salt: string, answer: string) => createHash('sha256').update(`${salt}:${answer}`).digest('hex');
+
+function fingerprints(questions: z.infer<typeof Made>['pull']['questions']): Fingerprints {
+  const salt = randomBytes(16).toString('base64url');
+  return { salt, byQuestion: Object.fromEntries(questions.flatMap((q) => (q.answer_text == null ? [] : [[q.id, fingerprint(salt, q.answer_text)]]))) };
+}
+
+// Each deck played is its own pull, so it has its own questions and its own
+// budget of checks. A deck that takes typed answers also gets their fingerprints.
 export async function newPull(deck: DeckSpec): Promise<Pull> {
   await ensureStream(deck);
   const key = `deck-${randomUUID()}`;
-  const { pull } = await call('/pulls/create', { stream: deck.slug, key, count: deck.size }, z.object({ pull: z.object({ token: z.string() }) }));
-  return { key, token: pull.token, ...learnerAccess() };
+  const { pull } = await call('/pulls/create', { stream: deck.slug, key, count: deck.size }, Made);
+  return { key, token: pull.token, ...learnerAccess(), ...(deck.acceptTyped ? { fingerprints: fingerprints(pull.questions) } : {}) };
 }
 
 // What a learner reads and checks a pull with, given its token.

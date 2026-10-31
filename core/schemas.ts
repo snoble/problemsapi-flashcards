@@ -32,7 +32,9 @@ export const DeckView = z.object({
 });
 export type DeckView = z.infer<typeof DeckView>;
 
-export const DeckSpec = DeckView.extend({ ref: z.string().min(1) });
+// `acceptTyped`: a right answer counts as soon as it is typed, without
+// Enter, by its fingerprint (see Fingerprints).
+export const DeckSpec = DeckView.extend({ ref: z.string().min(1), acceptTyped: z.boolean().optional() });
 export type DeckSpec = z.infer<typeof DeckSpec>;
 
 export const BoardId = z.base64url().length(16);
@@ -71,7 +73,19 @@ export const NewScore = z.object({
 
 // `key` names the pull to the app's own server; the browser reads and checks
 // the pull by its token.
-export const Pull = z.object({ key: z.string(), token: z.string(), publishableKey: z.string(), apiUrl: z.url() });
+// What lets the browser see that a typed answer is right before sending it:
+// each card's answer as sha256(salt:answer) in hex, by question id. With so
+// few possible answers, a learner who digs into the page can work them out.
+export const Fingerprints = z.object({ salt: z.string(), byQuestion: z.record(z.string(), z.string()) });
+export type Fingerprints = z.infer<typeof Fingerprints>;
+
+export const Pull = z.object({
+  key: z.string(),
+  token: z.string(),
+  publishableKey: z.string(),
+  apiUrl: z.url(),
+  fingerprints: Fingerprints.optional(),
+});
 export type Pull = z.infer<typeof Pull>;
 
 export const Card = z.discriminatedUnion('type', [

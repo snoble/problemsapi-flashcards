@@ -10,7 +10,7 @@ import { type FormEvent, type InputHTMLAttributes, type ReactNode, type RefObjec
 
 import Boards, { type Finish } from './Boards';
 import { post } from './request';
-import { type Card, type DeckView, LearnerChecked, LearnerPull, Pull, seconds, secondsWord } from './schemas';
+import { type Card, type DeckView, type Fingerprints, LearnerChecked, LearnerPull, Pull, seconds, secondsWord } from './schemas';
 
 type Loaded = { pull: Pull; cards: Card[] };
 // `shown`: the learner gave up and was shown the answer.
@@ -65,6 +65,22 @@ async function cardsFor(pull: Pull): Promise<Loaded> {
   const { questions } = await post(LearnerPull, `${pull.apiUrl}/learner/pull`, { token: pull.token }, pull.publishableKey);
   if (questions.length === 0) throw new Error('The deck came back empty. Try another.');
   return { pull, cards: questions };
+}
+
+// The typed answer as it is checked and sent: a whole number is read as
+// one, so 06 is 6.
+function normal(card: Card, typed: string): string {
+  const given = typed.trim();
+  return card.type === 'number' && /^\d+$/.test(given) ? String(Number(given)) : given;
+}
+
+// The typed answer, as sent, if it is the card's by its fingerprint.
+async function matches(prints: Fingerprints, card: Card, typed: string): Promise<string | null> {
+  const want = prints.byQuestion[card.id];
+  const given = normal(card, typed);
+  if (!want || !given) return null;
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${prints.salt}:${given}`));
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('') === want ? given : null;
 }
 
 // The mark under a card: a wrong answer and a notice read the same in every deck.
@@ -166,6 +182,11 @@ export function useDeck(deck: DeckView, firstPull: Promise<Pull | null>): Play {
   const late = useRef(false);
   const lastSent = useRef('');
   const expire = useRef(() => {});
+  // The answer box as last typed, the showing of the last card answered
+  // right, and how many checks have come back.
+  const typedNow = useRef('');
+  const rightAt = useRef(0);
+  const checked = useRef(0);
   const settled = stage.name === 'card' && (stage.result === 'right' || stage.result === 'shown');
 
   function show(at: number) {
@@ -174,6 +195,7 @@ export function useDeck(deck: DeckView, firstPull: Promise<Pull | null>): Play {
     clearTimeout(timer.current);
     timer.current = setTimeout(() => expire.current(), cardMs);
     setAnswer('');
+    typedNow.current = '';
     setStage({ name: 'card', at, showing: showings.current, tries: 0, result: null });
     input.current?.focus();
   }
@@ -231,19 +253,30 @@ export function useDeck(deck: DeckView, firstPull: Promise<Pull | null>): Play {
     inFlight.current = true;
     setBusy(true);
     let result: Result = null;
+    let tries = stage.tries;
     try {
-      const { marks } = await post(
-        LearnerChecked,
-        `${pull.apiUrl}/learner/check`,
-        { token: pull.token, by_question: [{ question: card.id, answer: given }] },
-        pull.publishableKey,
-      );
-      const found = marks.find((m) => m.question === card.id);
-      if (!found) throw new Error('The check came back without a mark for this card.');
-      result = found.correct ? 'right' : found.type === 'number' && found.value == null ? 'unread' : 'wrong';
-      const tries = stage.tries + 1;
+      // A right answer typed while a wrong one was on its way is checked next.
+      for (let sent = given; ; ) {
+        const { marks } = await post(
+          LearnerChecked,
+          `${pull.apiUrl}/learner/check`,
+          { token: pull.token, by_question: [{ question: card.id, answer: sent }] },
+          pull.publishableKey,
+        );
+        const found = marks.find((m) => m.question === card.id);
+        if (!found) throw new Error('The check came back without a mark for this card.');
+        result = found.correct ? 'right' : found.type === 'number' && found.value == null ? 'unread' : 'wrong';
+        tries += 1;
+        checked.current += 1;
+        const retyped = result === 'right' || !pull.fingerprints ? null : await matches(pull.fingerprints, card, typedNow.current);
+        if (!retyped || retyped === sent) break;
+        if (result === 'wrong' && !atDeadline && !late.current) setMistakes((n) => n + 1);
+        sent = retyped;
+        lastSent.current = sent;
+      }
       input.current?.focus();
       if (result === 'right') {
+        rightAt.current = stage.showing;
         clearTimeout(timer.current);
         if (tries === 1 && !missed.has(stage.at)) setFirstTry((n) => n + 1);
       } else {
@@ -292,6 +325,25 @@ export function useDeck(deck: DeckView, firstPull: Promise<Pull | null>): Play {
     if (given && !(stage.result !== null && given === lastSent.current)) void mark(given, true);
     else later(stage.at, true);
   };
+
+  // A typed answer that matches its card's fingerprint is sent at once, as
+  // Enter would send it, if the box still holds it and its card is still up
+  // and not yet right. A check that comes back after the keystroke, or is on
+  // its way, looks at the box itself when it comes back wrong.
+  function typed(text: string) {
+    if (settled) return;
+    setAnswer(text);
+    typedNow.current = text;
+    const prints = pull?.fingerprints;
+    if (!prints || stage.name !== 'card') return;
+    const card = cards[stage.at];
+    const showing = stage.showing;
+    const checks = checked.current;
+    void matches(prints, card, text).then((given) => {
+      const current = showings.current === showing && rightAt.current !== showing && checked.current === checks;
+      if (given && current && !inFlight.current && normal(card, typedNow.current) === given) send(given);
+    });
+  }
 
   function check(event: FormEvent) {
     event.preventDefault();
@@ -351,9 +403,7 @@ export function useDeck(deck: DeckView, firstPull: Promise<Pull | null>): Play {
     busy,
     notice,
     settled,
-    type: (typed) => {
-      if (!settled) setAnswer(typed);
-    },
+    type: typed,
     check,
     next,
     skip: () => {
