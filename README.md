@@ -2,7 +2,7 @@
 
 Two small Next.js apps built on the [Problems API](https://problemsapi.com), sharing one core. Each plays flashcard decks, each deck from its own stream, with a timer on each card and scoreboards you share with friends by an invite link.
 
-- [`times-tables/`](times-tables) is three decks from the times tables to 12 × 12, five seconds a card, typed on a number pad: products (`7 × 8 =`) on the front page, missing factors (`3 × _ = 18`) and the two mixed, each at `/d/<slug>`. It never shows an answer: it is practice against the clock. Live at [problemsapi-flashcards.vercel.app](https://problemsapi-flashcards.vercel.app).
+- [`times-tables/`](times-tables) is three games from the times tables to 12 × 12, five seconds a card, typed on a number pad: products (`7 × 8 =`) on the front page, missing factors (`3 × _ = 18`) and the two mixed, each at `/d/<slug>`. Each also plays at thirty seconds a card for learners, at `/d/<slug>-learning`, with scoreboards of its own. It never shows an answer: it is practice against the clock. Live at [problemsapi-flashcards.vercel.app](https://problemsapi-flashcards.vercel.app).
 - [`git-commands/`](git-commands) is five decks of git and gh commands, twenty seconds a card, typed on the full keyboard. A learner who gives up on a card can see its answer. Live at [git-flashcards-problemsapi.vercel.app](https://git-flashcards-problemsapi.vercel.app).
 - [`core/`](core) is what they share: the server's calls to the API, the deck in the browser, scoreboards, and the routes and pages both serve.
 

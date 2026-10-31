@@ -40,7 +40,8 @@ button:disabled { opacity: 0.5; cursor: default; }
 .score { font-size: 22px; font-weight: 700; margin: 0; }
 /* While a deck is out, the card sits at the top of the screen so a phone's
    keyboard leaves the question, the answer box and the mark in view. */
-main:has(.deck) .intro { display: none; }
+main:has(.deck) .intro, main:has(.deck) .pace { display: none; }
+.pace { color: var(--muted); font-size: 14px; }
 main:has(.deck) { padding-top: 12px; }
 .panel.deck { padding: 16px; margin-top: 8px; }
 @media (max-width: 600px) {
